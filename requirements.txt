@@ -1,0 +1,15 @@
+adafruit-circuitpython-bme280
+adafruit-blinka
+# Nutflix Platform - Shared Python Dependencies
+flask
+numpy
+opencv-python
+## Only install on Raspberry Pi hardware. Skip for Codespaces.
+# picamera2
+sounddevice
+scipy
+tensorflow
+# Use tflite-runtime on Pi; tensorflow as fallback for Codespaces/dev
+python-dotenv
+pyyaml
+aiofiles

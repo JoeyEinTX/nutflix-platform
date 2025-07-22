@@ -1,0 +1,11 @@
+{
+  "device_name": "nutpod-001",
+  "enabled_cameras": ["CritterCam", "NestCam"],
+  "motion_sensitivity": 0.4,
+  "record_audio": true,
+  "ai_model": "models/squirrelnet-v1.tflite",
+  "streaming_enabled": true,
+  "max_recording_duration": 30,
+  "cleanup_days": 30,
+  "pre_record_buffer": 1.0
+}

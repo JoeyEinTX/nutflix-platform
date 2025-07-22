@@ -1,0 +1,35 @@
+{% extends "base.html" %}
+
+{% block content %}
+    <h1>Recent Clips</h1>
+    {% if files %}
+        {% for file in files %}
+            <div class="clip-card">
+                {% set parts = file.rsplit('.', 1)[0].split('_') %}
+                <div class="clip-title">{{ file }}</div>
+                <div class="clip-meta">
+                    {% if parts|length > 2 %}
+                        Device: {{ parts[0] }} | Trigger: {{ parts[1] }} | Time: {{ parts[2] }}
+                    {% endif %}
+                </div>
+                <div class="clip-player">
+                    {% if file.endswith('.mp4') or file.endswith('.avi') %}
+                        <video width="320" height="240" controls>
+                            <source src="/recordings/{{ file }}" type="video/mp4">
+                            Your browser does not support the video tag.
+                        </video>
+                    {% elif file.endswith('.wav') %}
+                        <audio controls>
+                            <source src="/recordings/{{ file }}" type="audio/wav">
+                            Your browser does not support the audio element.
+                        </audio>
+                    {% else %}
+                        <a href="/recordings/{{ file }}" download>Download</a>
+                    {% endif %}
+                </div>
+            </div>
+        {% endfor %}
+    {% else %}
+        <p>No clips found.</p>
+    {% endif %}
+{% endblock %}

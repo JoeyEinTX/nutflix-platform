@@ -1,0 +1,9 @@
+{
+  "device": "GroundPod",
+  "cameras": ["ThermalCam"],
+  "audio": false,
+  "motion_detection": true,
+  "ai_model": "core/ai/model.tflite",
+  "retention_days": 2,
+  "streaming": false
+}

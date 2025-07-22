@@ -1,0 +1,21 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Nutflix Platform</title>
+    <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+    <nav>
+        <a href="/clips">Recordings</a>
+        <a href="/stream/crittercam">Live View</a>
+        <a href="/settings">Settings</a>
+    </nav>
+    <div class="container">
+        {% block content %}{% endblock %}
+    </div>
+    <footer>
+        &copy; 2025 Nutflix Platform &mdash; v1.2
+    </footer>
+</body>
+</html>

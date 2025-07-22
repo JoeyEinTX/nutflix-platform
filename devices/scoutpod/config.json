@@ -1,0 +1,9 @@
+{
+  "device": "ScoutPod",
+  "cameras": ["CritterCam"],
+  "audio": false,
+  "motion_detection": true,
+  "ai_model": "core/ai/model.tflite",
+  "retention_days": 3,
+  "streaming": false
+}
