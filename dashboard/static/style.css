@@ -1,3 +1,54 @@
+/* Motion Detected Badge Styling */
+.motion-badge {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  background: #e11d48;
+  color: #fff;
+  padding: 0.35em 0.9em;
+  border-radius: 16px;
+  font-size: 1em;
+  font-weight: bold;
+  box-shadow: 0 2px 8px rgba(225,29,72,0.15);
+  z-index: 2;
+  animation: pulse-badge 1s infinite alternate;
+}
+@keyframes pulse-badge {
+  0% { box-shadow: 0 0 0 0 #e11d48; }
+  100% { box-shadow: 0 0 12px 4px #e11d48; }
+}
+.camera-card {
+  position: relative;
+}
+/* Motion Events Table Styling */
+.motion-event-section {
+  margin-top: 2rem;
+  background: #f9fafb;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  padding: 1rem;
+}
+.motion-event-table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-top: 0.5rem;
+}
+.motion-event-table th, .motion-event-table td {
+  border: 1px solid #e5e7eb;
+  padding: 0.5rem 0.75rem;
+  text-align: left;
+}
+.motion-event-table th {
+  background: #f3f4f6;
+  font-weight: 600;
+}
+.motion-event-table tr:nth-child(even) {
+  background: #f8fafc;
+}
+.no-motion-events {
+  color: #888;
+  padding: 0.5rem 0;
+}
 .env-info {
   background: #f4f8fb;
   border: 1px solid #dbeafe;

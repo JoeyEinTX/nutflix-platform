@@ -1,3 +1,4 @@
+from core.utils.clip_coordinator import clip_coordinator
 """
 RecordingEngine: Handles video/audio recording, saving to /recordings/ with timestamped filenames.
 Supports background thread, max_duration, auto_stop, and future pre_record_buffer.
@@ -93,3 +94,8 @@ class RecordingEngine:
             self.file_manager.create_symlink_to_latest(video_path)
             # Clean again using cleanup_days from config
             self.file_manager.clean_old_recordings(max_age_days=self.config.get('cleanup_days', 30))
+            # Notify ClipCoordinator of video completion
+            try:
+                clip_coordinator.on_video_complete(cam_name, video_path)
+            except Exception as e:
+                print(f"[RecordingEngine] Failed to notify ClipCoordinator: {e}")
