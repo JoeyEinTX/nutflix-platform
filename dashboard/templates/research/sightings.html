@@ -1,0 +1,22 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="research-container">
+  <h1>Animal Sightings</h1>
+  <div class="research-card">
+    <table class="sightings-table">
+      <thead>
+        <tr><th>Species</th><th>Time</th><th>Location</th></tr>
+      </thead>
+      <tbody>
+        {% for s in sightings %}
+        <tr>
+          <td>{{ s.species }}</td>
+          <td>{{ s.time }}</td>
+          <td>{{ s.location }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}

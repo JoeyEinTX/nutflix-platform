@@ -1,7 +1,11 @@
+
 import sys
 import os
 # Add the parent directory to Python path so we can import 'core'
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+# Enable CORS for API endpoints
+from flask_cors import CORS
 
 from flask import Flask, redirect, url_for, render_template
 
@@ -46,7 +50,17 @@ except ImportError as e:
     dashboard_bp = None
     DASHBOARD_AVAILABLE = False
 
+# Research blueprint
+try:
+    from routes.research import research_bp
+    RESEARCH_AVAILABLE = True
+except ImportError as e:
+    print(f"Research module not available: {e}")
+    research_bp = None
+    RESEARCH_AVAILABLE = False
+
 app = Flask(__name__, static_folder='static', template_folder='templates')
+CORS(app)
 
 # Register blueprints only if they're available
 if STREAM_AVAILABLE and stream_bp:
@@ -68,6 +82,10 @@ if HEALTH_AVAILABLE and health_bp:
 if DASHBOARD_AVAILABLE and dashboard_bp:
     app.register_blueprint(dashboard_bp, url_prefix='')
     print("✓ Dashboard module registered")
+
+if RESEARCH_AVAILABLE and research_bp:
+    app.register_blueprint(research_bp, url_prefix='')
+    print("✓ Research module registered")
 
 # Fallback routes if modules aren't available
 if not DASHBOARD_AVAILABLE:

@@ -1,0 +1,8 @@
+/* Scoped styles for Research Dashboard */
+.research-container { padding: 2em; }
+.research-card { background: #f4f8fb; border-radius: 8px; padding: 1.5em; margin-bottom: 1.5em; box-shadow: 0 1px 4px rgba(0,0,0,0.04); }
+.sightings-table { width: 100%; border-collapse: collapse; margin-top: 1em; }
+.sightings-table th, .sightings-table td { border: 1px solid #e5e7eb; padding: 0.5em 0.75em; }
+.sightings-table th { background: #e0e7ef; }
+.sightings-table tr:nth-child(even) { background: #f8fafc; }
+.trends-chart-container { background: #fff; border-radius: 8px; padding: 1.5em; margin-top: 2em; box-shadow: 0 1px 4px rgba(0,0,0,0.03); }

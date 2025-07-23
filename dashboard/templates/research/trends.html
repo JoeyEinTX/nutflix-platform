@@ -1,0 +1,26 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="research-container">
+  <h1>Environmental Trends</h1>
+  <div class="trends-chart-container">
+    <canvas id="envChart" width="600" height="300"></canvas>
+  </div>
+</div>
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script>
+const ctx = document.getElementById('envChart').getContext('2d');
+const envData = {{ env_data|tojson }};
+const chart = new Chart(ctx, {
+  type: 'line',
+  data: {
+    labels: envData.labels,
+    datasets: [
+      { label: 'Temperature (°C)', data: envData.temperature, borderColor: '#f87171', fill: false },
+      { label: 'Humidity (%)', data: envData.humidity, borderColor: '#60a5fa', fill: false },
+      { label: 'Pressure (hPa)', data: envData.pressure, borderColor: '#fbbf24', fill: false }
+    ]
+  },
+  options: { responsive: true, plugins: { legend: { position: 'top' } } }
+});
+</script>
+{% endblock %}
