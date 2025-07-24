@@ -90,6 +90,17 @@ def api_status():
     return jsonify(status)
 
 # Serve React static files in production
+@app.route('/app/static/<path:path>')
+def serve_static(path):
+    """Serve React static files (CSS, JS, etc.)"""
+    frontend_build = Path(__file__).parent.parent / 'frontend' / 'build'
+    static_path = frontend_build / 'static' / path
+    
+    if static_path.exists():
+        return send_from_directory(frontend_build / 'static', path)
+    else:
+        return "Static file not found", 404
+
 @app.route('/app')
 @app.route('/app/<path:path>')
 def serve_react_app(path=''):
@@ -97,7 +108,12 @@ def serve_react_app(path=''):
     frontend_build = Path(__file__).parent.parent / 'frontend' / 'build'
     
     if frontend_build.exists():
-        if path and (frontend_build / path).exists():
+        # Handle static files
+        if path.startswith('static/'):
+            static_file = path[7:]  # Remove 'static/' prefix
+            return serve_static(static_file)
+        # Handle other assets (favicon, manifest, etc.)
+        elif path and (frontend_build / path).exists():
             return send_from_directory(frontend_build, path)
         else:
             return send_from_directory(frontend_build, 'index.html')
@@ -145,4 +161,4 @@ def home():
         })
 
 if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=8000, debug=True)
+    app.run(host='0.0.0.0', port=8000, debug=False)

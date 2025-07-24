@@ -1,0 +1,63 @@
+/* 
+INTEGRATION GUIDE: Place Your Existing Dashboard Styles Here
+
+Step 1: Copy your existing CSS files to this directory
+Step 2: Update the import in App.jsx to use your styles
+Step 3: Adjust component class names to match your existing CSS
+
+Example structure:
+/src/your-dashboard/
+  ├── styles/
+  │   ├── main.css           # Your main dashboard styles
+  │   ├── components.css     # Component-specific styles
+  │   └── variables.css      # CSS custom properties
+  ├── components/
+  │   ├── YourDashboard.jsx  # Your existing dashboard component
+  │   ├── YourCharts.jsx     # Your existing chart components
+  │   └── YourModals.jsx     # Your existing modal components
+  └── utils/
+      ├── helpers.js         # Your utility functions
+      └── constants.js       # Your constants
+
+INTEGRATION STEPS:
+
+1. COPY YOUR FILES:
+   - Copy your existing CSS files here
+   - Copy your React components here
+   - Copy any utility files
+
+2. UPDATE IMPORTS IN App.jsx:
+   - Change: import './App.css';
+   - To: import './your-dashboard/styles/main.css';
+
+3. SWAP COMPONENTS:
+   - Replace our components with yours in App.jsx
+   - Use the same props interface we've established
+
+4. DATA MAPPING:
+   The systemHealth state is already structured for easy mapping:
+   {
+     status: 'online',
+     cameras: { outside: true, inside: true },
+     storage: 75,
+     temperature: 22.5,
+     humidity: 65
+   }
+
+5. KEEP WHAT WORKS:
+   - Navigation structure
+   - State management
+   - Responsive layout system
+   - Real-time update logic
+
+BENEFITS OF THIS APPROACH:
+✅ Zero risk - your existing code stays intact
+✅ Gradual migration - replace components one by one
+✅ Best of both worlds - your styling + our architecture
+✅ Easy rollback - just change imports back
+*/
+
+/* Placeholder for your existing dashboard styles */
+.your-dashboard-container {
+  /* Your styles here */
+}

@@ -1,0 +1,346 @@
+/* 
+NUTFLIX INTEGRATED STYLES - Migra.camera-card.offline {
+  border-left-color: #cc5500;
+}
+
+.camera-card h3 {
+  margin: 0 0 0.5rem 0;
+  color: #f0f0f0;
+} Flask Dashboard
+Original: dashboard/static/style.css
+Adapted for React components while preserving your design patterns
+*/
+
+/* Your existing global styles would go here - copying your patterns */
+
+/* Motion Badge System (from your Flask dashboard) */
+.motion-badge {
+    display: inline-block;
+    padding: 4px 8px;
+    border-radius: 12px;
+    font-size: 0.8rem;
+    font-weight: bold;
+    animation: pulse 2s infinite;
+}
+
+.motion-badge.active {
+    background-color: #ff4444;
+    color: white;
+}
+
+.motion-badge.inactive {
+    background-color: #666;
+    color: white;
+}
+
+/* Camera Card System (matching your Flask patterns) */
+.camera-card {
+  background: rgba(30, 45, 55, 0.95);
+  border-radius: 8px;
+  padding: 1rem;
+  margin-bottom: 0.75rem;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.3);
+  border-left: 4px solid #76b900;
+  color: #e0e0e0;
+}.camera-card.offline {
+    border-left-color: #f44336;
+}
+
+.camera-card h3 {
+    margin: 0 0 0.5rem 0;
+    color: #333;
+}
+
+.camera-card .status {
+    font-weight: bold;
+    text-transform: uppercase;
+    font-size: 0.9rem;
+}
+
+.camera-card .status.online {
+  color: #76b900;
+}
+
+.camera-card .status.offline {
+  color: #cc5500;
+}/* Status Cards (from your dashboard widgets) */
+.status-card {
+  background: linear-gradient(135deg, #2d5016 0%, #3e6b1a 100%);
+  color: white;
+  padding: 1.25rem;
+  border-radius: 8px;
+  text-align: center;
+  margin-bottom: 0.75rem;
+  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.4);
+}.status-card h3 {
+    margin: 0 0 0.5rem 0;
+    font-size: 0.9rem;
+    opacity: 0.9;
+}
+
+.status-card .value {
+    font-size: 2rem;
+    font-weight: bold;
+    margin: 0.5rem 0;
+}
+
+.status-card .unit {
+    font-size: 0.8rem;
+    opacity: 0.8;
+}
+
+/* Environment Info (matching your Flask styling) */
+.env-info {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+    gap: 1rem;
+    margin-bottom: 1rem;
+}
+
+.env-item {
+    text-align: center;
+    padding: 1rem;
+    background: rgba(255, 255, 255, 0.1);
+    border-radius: 6px;
+}
+
+.env-item h4 {
+    margin: 0 0 0.5rem 0;
+    color: rgba(255, 255, 255, 0.8);
+    font-size: 0.8rem;
+    text-transform: uppercase;
+}
+
+.env-value {
+    font-size: 1.4rem;
+    font-weight: bold;
+    color: white;
+}
+
+/* Activity Section (from your Flask dashboard) */
+.activity-section {
+  background: rgba(30, 45, 55, 0.95);
+  border-radius: 8px;
+  padding: 1rem;
+  margin-bottom: 0.75rem;
+  color: #e0e0e0;
+  border: 1px solid rgba(76, 175, 80, 0.2);
+}.activity-section h3 {
+  margin: 0 0 1rem 0;
+  color: #f0f0f0;
+  border-bottom: 2px solid #76b900;
+  padding-bottom: 0.5rem;
+}
+
+.activity-item {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  padding: 0.75rem;
+  border-bottom: 1px solid rgba(76, 175, 80, 0.2);
+}.activity-item:last-child {
+    border-bottom: none;
+}
+
+.activity-time {
+  font-weight: bold;
+  color: #8fbc8f;
+  min-width: 60px;
+  font-family: monospace;
+}
+
+.activity-event {
+  flex: 1;
+  color: #d0d0d0;
+}/* Clip Player (from your media player components) */
+.clip-player {
+    background: #000;
+    border-radius: 8px;
+    overflow: hidden;
+    margin-bottom: 1rem;
+}
+
+.clip-player video,
+.clip-player audio {
+    width: 100%;
+    height: auto;
+}
+
+.clip-player .placeholder {
+    aspect-ratio: 16/9;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #666;
+    font-size: 1.2rem;
+}
+
+/* Form Components (from your settings forms) */
+.form-section {
+  background: rgba(30, 45, 55, 0.95);
+  border-radius: 8px;
+  padding: 1.25rem;
+  margin-bottom: 0.75rem;
+  color: #e0e0e0;
+  border: 1px solid rgba(76, 175, 80, 0.2);
+}.form-section h3 {
+    margin: 0 0 1rem 0;
+    color: #333;
+}
+
+.form-group {
+    margin-bottom: 1rem;
+}
+
+.form-group label {
+    display: block;
+    margin-bottom: 0.5rem;
+    font-weight: bold;
+    color: #555;
+}
+
+.form-group input,
+.form-group select {
+    width: 100%;
+    padding: 0.5rem;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    font-size: 1rem;
+}
+
+.form-group input[type="range"] {
+    margin-top: 0.5rem;
+}
+
+.range-value {
+    display: inline-block;
+    margin-left: 1rem;
+    padding: 0.25rem 0.5rem;
+    background: #f0f0f0;
+    border-radius: 4px;
+    font-weight: bold;
+    color: #333;
+}
+
+.submit-btn {
+  background: linear-gradient(45deg, #5a7c0a, #76b900);
+  color: white;
+  border: none;
+  padding: 0.75rem 1.5rem;
+  border-radius: 6px;
+  cursor: pointer;
+  font-weight: bold;
+  transition: all 0.3s ease;
+}.submit-btn:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
+}
+
+/* Modal System (from your Flask modals) */
+.modal-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0, 0, 0, 0.5);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 1000;
+}
+
+.modal-content {
+    background: white;
+    border-radius: 8px;
+    padding: 2rem;
+    max-width: 500px;
+    width: 90%;
+    max-height: 80vh;
+    overflow-y: auto;
+}
+
+.modal-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 1rem;
+    border-bottom: 1px solid #eee;
+    padding-bottom: 1rem;
+}
+
+.modal-close {
+    background: none;
+    border: none;
+    font-size: 1.5rem;
+    cursor: pointer;
+    color: #666;
+    padding: 0.5rem;
+}
+
+/* Data Tables (from your motion events table) */
+.data-table {
+  width: 100%;
+  border-collapse: collapse;
+  background: rgba(30, 45, 55, 0.95);
+  border-radius: 8px;
+  overflow: hidden;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.3);
+  color: #e0e0e0;
+}.data-table th,
+.data-table td {
+    padding: 0.75rem;
+    text-align: left;
+    border-bottom: 1px solid rgba(76, 175, 80, 0.2);
+}
+
+.data-table th {
+    background: rgba(20, 30, 40, 0.8);
+    font-weight: bold;
+    color: #f0f0f0;
+}
+
+.data-table tr:nth-child(even) {
+    background: rgba(20, 30, 40, 0.3);
+}
+
+.data-table tr:hover {
+    background: rgba(76, 175, 80, 0.2);
+}
+
+/* Responsive Design (matching your mobile queries) */
+@media (max-width: 768px) {
+    .env-info {
+        grid-template-columns: repeat(2, 1fr);
+    }
+    
+    .camera-card {
+        margin-bottom: 0.5rem;
+    }
+    
+    .activity-item {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 0.5rem;
+    }
+    
+    .modal-content {
+        margin: 1rem;
+        padding: 1rem;
+    }
+    
+    .data-table {
+        font-size: 0.9rem;
+    }
+    
+    .data-table th,
+    .data-table td {
+        padding: 0.5rem;
+    }
+}
+
+/* Animations (preserving your pulse animation) */
+@keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.5; }
+}

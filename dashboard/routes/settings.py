@@ -1,4 +1,4 @@
-from flask import Blueprint, request, render_template, redirect, url_for, flash
+from flask import Blueprint, request, render_template, redirect, url_for, flash, jsonify
 from core.config.settings_manager import SettingsManager, SettingsError
 
 settings_bp = Blueprint('settings', __name__)
@@ -44,3 +44,46 @@ def settings():
         'pre_record_buffer': settings_mgr.get_setting('pre_record_buffer'),
     }
     return render_template('settings.html', settings=settings)
+
+# API endpoints for React app
+@settings_bp.route('/api/settings', methods=['GET'])
+def get_settings():
+    """Get current system settings"""
+    from core.config.settings_manager import SettingsManager
+    
+    # Use nutpod as default device (could be dynamic later)
+    settings_mgr = SettingsManager('nutpod')
+    
+    def safe_get_setting(key, default=None):
+        try:
+            return settings_mgr.get_setting(key)
+        except:
+            return default
+    
+    settings = {
+        'motion_threshold': safe_get_setting('motion_threshold', 30),
+        'record_audio': safe_get_setting('record_audio', True),
+        'streaming_enabled': safe_get_setting('streaming_enabled', True),
+        'max_recording_duration': safe_get_setting('max_recording_duration', 60),
+        'cleanup_days': safe_get_setting('cleanup_days', 7),
+        'pre_record_buffer': safe_get_setting('pre_record_buffer', 2),
+        'enabled_cameras': safe_get_setting('enabled_cameras', ['CritterCam', 'NestCam']),
+        'ai_model': safe_get_setting('ai_model', 'models/squirrelnet-v1.tflite')
+    }
+    return jsonify(settings)
+
+@settings_bp.route('/api/settings', methods=['POST'])
+def update_settings():
+    """Update settings"""
+    try:
+        data = request.get_json()
+        for key, value in data.items():
+            if key in ['motion_sensitivity', 'record_audio', 'streaming_enabled', 
+                      'max_recording_duration', 'cleanup_days', 'pre_record_buffer',
+                      'enabled_cameras', 'ai_model']:
+                settings_mgr.update_setting(key, value)
+        
+        settings_mgr.save_settings()
+        return jsonify({'success': True, 'message': 'Settings updated'})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 400

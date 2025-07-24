@@ -1,0 +1,16 @@
+[Unit]
+Description=Nutflix Wildlife Platform
+After=network.target
+
+[Service]
+Type=simple
+User=p12146
+WorkingDirectory=/home/p12146/NutFlix/nutflix-platform
+Environment=PATH=/home/p12146/NutFlix/nutflix-platform/.venv/bin
+Environment=PYTHONPATH=/usr/lib/python3/dist-packages:/home/p12146/NutFlix/nutflix-platform/.venv/lib/python3.11/site-packages
+ExecStart=/home/p12146/NutFlix/nutflix-platform/.venv/bin/python dashboard/app_with_react.py
+Restart=always
+RestartSec=3
+
+[Install]
+WantedBy=multi-user.target

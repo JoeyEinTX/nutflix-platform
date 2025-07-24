@@ -4,7 +4,7 @@ CameraManager: Loads device config, initializes CritterCam and NestCam using Pic
 provides get_frame(camera_name), start_preview(), stop_preview(), and handles missing cameras.
 """
 
-
+import cv2
 import numpy as np
 from core.config.config_manager import get_config, ConfigError
 
@@ -40,34 +40,80 @@ class CameraManager:
             raise RuntimeError(f"Failed to load config for {device_name}: {e}")
         self.cameras = {}
         self.previews = {}
+        self._initialize_cameras()
+        
+    def _initialize_cameras(self):
+        """Initialize cameras with retry logic"""
         enabled = self.config.get("enabled_cameras", [])
         # Map logical names to Picamera2 indexes (assume 0: CritterCam, 1: NestCam)
         cam_map = {"CritterCam": 0, "NestCam": 1}
+        
         for name in enabled:
             idx = cam_map.get(name)
             if idx is not None:
-                try:
-                    if PICAMERA2_AVAILABLE:
-                        cam = Picamera2(idx)
-                        cam.configure(cam.create_still_configuration())
-                        cam.start()
-                    else:
-                        cam = MockCamera(idx)
-                    self.cameras[name] = cam
-                except Exception as e:
-                    print(f"Warning: Could not initialize {name} (index {idx}): {e}")
+                self._init_single_camera(name, idx)
             else:
                 print(f"Warning: Unknown camera name '{name}' in config.")
+                
+    def _init_single_camera(self, name: str, idx: int):
+        """Initialize a single camera with error handling"""
+        try:
+            if PICAMERA2_AVAILABLE:
+                print(f"[CameraManager] Initializing {name} at index {idx}")
+                cam = Picamera2(idx)
+                
+                # Configure for still capture with proper color format
+                still_config = cam.create_still_configuration(
+                    main={"size": (640, 480), "format": "RGB888"},  # Use RGB888 for better color
+                    encode="main"
+                )
+                cam.configure(still_config)
+                cam.start()
+                
+                self.cameras[name] = cam
+                print(f"[CameraManager] ✓ {name} initialized successfully at 640x480 RGB888")
+            else:
+                cam = MockCamera(idx)
+                self.cameras[name] = cam
+                print(f"[CameraManager] ✓ {name} initialized in mock mode")
+        except Exception as e:
+            print(f"[CameraManager] Warning: Could not initialize {name} (index {idx}): {e}")
+            # Store the error for debugging
+            self.cameras[name] = None
 
     def get_frame(self, camera_name: str) -> np.ndarray:
         cam = self.cameras.get(camera_name)
         if not cam:
             raise ValueError(f"Camera '{camera_name}' not initialized or not enabled.")
+        if cam is None:  # Camera failed to initialize
+            raise RuntimeError(f"Camera '{camera_name}' failed to initialize.")
         try:
             frame = cam.capture_array()
+            if frame is None:
+                raise RuntimeError(f"Camera '{camera_name}' returned None frame.")
+            
+            # Debug the frame format
+            print(f"[CameraManager] {camera_name} frame shape: {frame.shape}, dtype: {frame.dtype}")
+            
+            # The IMX708 with RGB888 format should give us RGB, but let's not convert
+            # and see if that fixes the color issue
+            if len(frame.shape) == 3 and frame.shape[2] == 3:
+                # Try no conversion first - maybe the issue is our RGB→BGR conversion
+                return frame
+            
             return frame
         except Exception as e:
+            print(f"[CameraManager] Error capturing from {camera_name}: {e}")
             raise RuntimeError(f"Failed to capture frame from {camera_name}: {e}")
+            
+    def is_camera_available(self, camera_name: str) -> bool:
+        """Check if a camera is available and working"""
+        cam = self.cameras.get(camera_name)
+        return cam is not None and cam is not False
+        
+    def get_available_cameras(self) -> list:
+        """Get list of successfully initialized cameras"""
+        return [name for name, cam in self.cameras.items() if cam is not None]
 
     def start_preview(self, camera_name: str):
         cam = self.cameras.get(camera_name)
