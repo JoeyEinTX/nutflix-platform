@@ -1,0 +1,230 @@
+# Nutflix Lite - Default Settings Configuration
+# This file defines the base settings schema and defaults for all device types
+# Settings are organized by logical groups for UI and management purposes
+
+# ==============================================================================
+# CAMERA SETTINGS
+# ==============================================================================
+camera:
+  # Primary camera configuration
+  primary_camera:
+    enabled: true
+    name: "CritterCam"
+    resolution: "1920x1080"
+    framerate: 30
+    brightness: 50
+    contrast: 50
+    saturation: 50
+    
+  # Secondary camera (if available)
+  secondary_camera:
+    enabled: true
+    name: "NestCam"
+    resolution: "1920x1080"
+    framerate: 30
+    brightness: 50
+    contrast: 50
+    saturation: 50
+    
+  # Recording settings
+  recording:
+    quality: "high"  # high, medium, low
+    format: "mp4"
+    max_clip_duration: 30  # seconds
+    pre_record_buffer: 2.0  # seconds
+    post_record_buffer: 3.0  # seconds
+
+# ==============================================================================
+# MOTION DETECTION SETTINGS
+# ==============================================================================
+motion:
+  # Detection parameters
+  detection:
+    enabled: true
+    sensitivity: 0.4  # 0.0 = least sensitive, 1.0 = most sensitive
+    min_area: 500  # minimum pixel area to trigger
+    cooldown_period: 10  # seconds between triggers
+    zones:
+      - name: "main"
+        enabled: true
+        coordinates: [0, 0, 1920, 1080]  # x1, y1, x2, y2
+        
+  # GPIO motion sensors (if available)
+  sensors:
+    gpio_pins:
+      CritterCam: 17
+      NestCam: 27
+    debounce_time: 2.0  # seconds
+
+# ==============================================================================
+# AUDIO SETTINGS
+# ==============================================================================
+audio:
+  # Recording configuration
+  recording:
+    enabled: true
+    format: "wav"
+    sample_rate: 44100
+    channels: 1  # mono
+    duration: 10  # seconds per clip
+    quality: "medium"  # high, medium, low
+    
+  # Audio triggers
+  triggers:
+    motion_triggered: true
+    continuous: false
+    scheduled: false
+    
+  # Audio processing
+  processing:
+    noise_reduction: true
+    auto_gain: true
+    volume_level: 75  # 0-100
+
+# ==============================================================================
+# POWER MANAGEMENT
+# ==============================================================================
+power:
+  # Power saving modes
+  mode: "balanced"  # performance, balanced, eco
+  
+  # Sleep settings
+  sleep:
+    enabled: false
+    start_time: "22:00"
+    end_time: "06:00"
+    
+  # CPU throttling
+  cpu:
+    max_usage: 80  # percentage
+    throttle_temperature: 70  # Celsius
+    
+  # Camera power management
+  camera:
+    idle_timeout: 300  # seconds before powering down
+    quick_wake: true
+
+# ==============================================================================
+# NETWORK SETTINGS
+# ==============================================================================
+network:
+  # Basic networking
+  hostname: "nutflix-lite"
+  
+  # WiFi configuration (if applicable)
+  wifi:
+    auto_connect: true
+    power_save: false
+    
+  # Streaming settings
+  streaming:
+    enabled: true
+    port: 5000
+    quality: "medium"
+    max_viewers: 3
+    
+  # Remote access
+  remote:
+    ssh_enabled: true
+    web_interface: true
+    api_enabled: true
+
+# ==============================================================================
+# PRIVACY SETTINGS
+# ==============================================================================
+privacy:
+  # Camera privacy controls
+  camera:
+    recording_enabled: true
+    streaming_enabled: true
+    privacy_mode: false  # disables all camera functions
+    field_of_view_warning: true
+    
+  # Audio privacy controls
+  audio:
+    recording_enabled: true
+    privacy_mode: false  # disables all audio recording
+    
+  # Data retention and storage
+  data:
+    retention_period: 30  # days
+    auto_cleanup: true
+    local_storage_only: true
+    
+  # Logging and monitoring
+  logging:
+    system_logs: true
+    access_logs: true
+    debug_logs: false
+    log_retention: 7  # days
+    
+  # Privacy notifications
+  notifications:
+    recording_indicator: true
+    privacy_mode_alerts: true
+    data_retention_warnings: true
+
+# ==============================================================================
+# STORAGE SETTINGS
+# ==============================================================================
+storage:
+  # Local storage configuration
+  local:
+    base_path: "/home/pi/nutflix-data"
+    recordings_path: "recordings"
+    logs_path: "logs"
+    temp_path: "temp"
+    
+  # Storage management
+  management:
+    max_storage_usage: 80  # percentage of available space
+    cleanup_threshold: 90  # percentage when emergency cleanup starts
+    archive_old_files: true
+    
+  # File organization
+  organization:
+    date_folders: true  # organize by date
+    camera_subfolders: true  # separate by camera
+    naming_pattern: "%Y%m%d_%H%M%S"  # timestamp format
+
+# ==============================================================================
+# AI AND DETECTION SETTINGS
+# ==============================================================================
+ai:
+  # Species detection (future)
+  detection:
+    enabled: false
+    model_path: "models/wildlife_detection.tflite"
+    confidence_threshold: 0.7
+    
+  # Processing
+  processing:
+    real_time: false
+    batch_processing: true
+    
+# ==============================================================================
+# SYSTEM SETTINGS
+# ==============================================================================
+system:
+  # Device identification
+  device:
+    type: "nutflix_lite"
+    name: "Nutflix Lite Device"
+    location: ""
+    
+  # Timezone and time
+  time:
+    timezone: "UTC"
+    ntp_enabled: true
+    
+  # Updates and maintenance
+  updates:
+    auto_update: false
+    check_interval: 24  # hours
+    
+  # Performance monitoring
+  monitoring:
+    enabled: true
+    cpu_alerts: true
+    memory_alerts: true
+    temperature_alerts: true
