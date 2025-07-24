@@ -1,0 +1,19 @@
+# Nutflix Platform - Development vs Production Requirements
+
+## Development (Codespaces/Local)
+```bash
+# For development without Pi hardware
+pip install flask flask-cors opencv-python numpy tensorflow python-dotenv pyyaml aiofiles
+```
+
+## Production (Raspberry Pi)  
+```bash
+# Full installation on Pi
+pip install -r requirements.txt
+```
+
+## Key Differences:
+- **Dev**: Uses tensorflow (large but full featured)
+- **Pi**: Uses tflite-runtime (optimized for Pi)
+- **Dev**: Skips hardware packages (adafruit, picamera2)
+- **Pi**: Includes all hardware support

@@ -20,7 +20,8 @@ nutflix-platform/
 │   ├── nutpod/
 │   ├── scoutpod/
 │   └── groundpod/
-├── dashboard/           # Local dashboard (Flask or FastAPI)
+├── frontend/            # React-based web interface
+├── dashboard/           # Flask API backend
 ├── scripts/             # Installers, CLI tools, utilities
 ├── docs/                # Tech specs, setup guides, architecture
 └── README.md
@@ -48,8 +49,45 @@ git clone https://github.com/JoeyEinTX/nutflix-platform.git
 cd nutflix-platform
 python3 -m venv .venv
 source .venv/bin/activate
-pip install -r requirements.txt
+pip install -r requirements-dev.txt  # Development dependencies
+
+# Set up React frontend integration
+./setup_react_integration.sh
 ```
+
+## 🥧 Raspberry Pi Deployment
+
+Ready for Pi deployment! See `PI_DEPLOYMENT.md` for complete setup instructions.
+
+**Quick Pi Setup:**
+```bash
+git clone https://github.com/JoeyEinTX/nutflix-platform.git
+cd nutflix-platform
+python3 -m venv .venv
+source .venv/bin/activate
+pip install -r requirements.txt  # Full Pi requirements
+./setup_react_integration.sh
+./start_backend.sh
+```
+
+Access at: `http://[pi-ip]:8000/app`
+
+## 🌐 React Frontend
+
+The platform now includes a professional React-based web interface:
+
+```bash
+# Start backend API (Terminal 1)
+./start_backend.sh
+
+# Start React frontend (Terminal 2)  
+./start_frontend.sh
+```
+
+- Backend API: http://localhost:8000
+- React Frontend: http://localhost:3000
+
+See `INTEGRATION_GUIDE.md` for detailed setup and integration instructions.
 
 ---
 
@@ -72,7 +110,8 @@ Each device has its own folder under `/devices/`, but all rely on shared modules
 | Core modules     | In progress   |
 | NutPod config    | 🚧 Setup       |
 | ScoutPod support | ❌ Not started |
-| Dashboard UI     | 🚧 Planning    |
+| Dashboard UI     | ✅ React Ready    |
+| Pi Deployment    | ✅ Ready to Clone |
 | Cloud sharing    | ❌ Later phase |
 
 ---
