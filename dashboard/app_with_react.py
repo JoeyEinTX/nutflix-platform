@@ -11,7 +11,7 @@ from pathlib import Path
 # Add the parent directory to Python path so we can import 'core'
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from flask import Flask, redirect, url_for, render_template, jsonify, send_from_directory
+from flask import Flask, redirect, url_for, render_template, jsonify, send_from_directory, request
 from flask_cors import CORS
 
 # Import sighting service
@@ -104,13 +104,14 @@ def api_status():
 # Real-time Sighting API endpoints
 @app.route('/api/sightings')
 def api_sightings():
-    """Get recent sightings from motion detection"""
+    """Get recent sightings from motion detection, optionally filtered by camera"""
     if not SIGHTING_SERVICE_AVAILABLE:
         return jsonify({'error': 'Sighting service not available'}), 503
         
     try:
-        limit = 20  # Get more recent sightings
-        sightings = sighting_service.get_recent_sightings(limit)
+        limit = request.args.get('limit', 20, type=int)
+        camera = request.args.get('camera', None)  # Optional camera filter
+        sightings = sighting_service.get_recent_sightings(limit, camera)
         return jsonify(sightings)
     except Exception as e:
         return jsonify({'error': str(e)}), 500

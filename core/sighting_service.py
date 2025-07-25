@@ -3,9 +3,9 @@ Real-time sighting service that connects motion detection to database storage
 """
 import sqlite3
 import time
+import threading
 from datetime import datetime
 from typing import Dict, Optional
-import threading
 import json
 import os
 
@@ -19,12 +19,17 @@ DB_PATH = '/home/p12146/NutFlix/nutflix-platform/nutflix.db'
 class SightingService:
     def __init__(self):
         self.db_path = DB_PATH
-        self.motion_detector = None
-        self.camera_manager = None
-        self.file_manager = None
+        self.camera_manager = None  # Will be set from outside
         self.running = False
         self.recent_sightings = []  # In-memory cache for quick access
         self.sighting_callbacks = []  # For real-time updates
+        
+        # Initialize motion detectors immediately
+        self.motion_detectors = {
+            'CritterCam': None,  # Will be initialized when needed
+            'NestCam': None
+        }
+        self.motion_threads = {}
         
         # Initialize database
         self._init_database()
@@ -74,41 +79,116 @@ class SightingService:
         
         # Initialize components
         try:
-            # Initialize motion detector with default config
-            sensor_config = {
-                'CritterCam': 18,  # Default GPIO pin
-                'NestCam': 19
-            }
-            self.motion_detector = MotionDetector(sensor_config)
-            # Skip FileManager for now - we'll implement clip saving later
-            self.file_manager = None
+            # Import the VisionMotionDetector
+            from core.motion.motion_detector import VisionMotionDetector
             
-            # Set up motion detection callback
-            self.motion_detector.set_motion_callback(self._on_motion_detected)
+            # Initialize vision-based motion detectors
+            self.motion_detectors['CritterCam'] = VisionMotionDetector(motion_sensitivity=0.3, cooldown_sec=2.0)
+            self.motion_detectors['NestCam'] = VisionMotionDetector(motion_sensitivity=0.3, cooldown_sec=2.0)
             
-            # Start motion detection
-            self.motion_detector.start_detection()
-            
-            print("✅ Sighting service started - motion detection active")
+            print("✅ Sighting service started - ready for vision-based motion detection")
             
         except Exception as e:
             print(f"❌ Error starting sighting service: {e}")
             self.running = False
             
+    def connect_camera_manager(self, camera_manager):
+        """Connect an existing camera manager to avoid camera conflicts"""
+        self.camera_manager = camera_manager
+        
+        # Get available cameras
+        available_cameras = self.camera_manager.get_available_cameras()
+        print(f"📹 Connected to cameras: {available_cameras}")
+        
+        # Initialize VisionMotionDetectors if not already done
+        if not self.running:
+            from core.motion.motion_detector import VisionMotionDetector
+            for camera_name in available_cameras:
+                if camera_name in self.motion_detectors and self.motion_detectors[camera_name] is None:
+                    self.motion_detectors[camera_name] = VisionMotionDetector(motion_sensitivity=0.3, cooldown_sec=2.0)
+                    
+        print("🎥 Vision-based motion detection connected and ready!")
+        
+    def check_motion_in_frame(self, camera_name: str, frame):
+        """Check for motion in a frame (called from streaming service)"""
+        if not self.running or camera_name not in self.motion_detectors:
+            return False
+            
+        detector = self.motion_detectors[camera_name]
+        if detector is None:
+            # Initialize detector if not done yet
+            from core.motion.motion_detector import VisionMotionDetector
+            detector = VisionMotionDetector(motion_sensitivity=0.3, cooldown_sec=2.0)
+            self.motion_detectors[camera_name] = detector
+            
+        motion_detected = detector.detect_motion(frame)
+        
+        if motion_detected:
+            timestamp = datetime.now().isoformat()
+            self._on_vision_motion_detected(camera_name, timestamp, detector)
+            
+        return motion_detected
+            
     def stop_detection(self):
         """Stop the motion detection system"""
         self.running = False
         
-        if self.motion_detector:
-            self.motion_detector.stop_detection()
+        # Stop all camera monitoring threads
+        for camera_name in list(self.motion_threads.keys()):
+            self.motion_threads[camera_name] = False  # Signal thread to stop
             
         print("🛑 Sighting service stopped")
         
-    def _on_motion_detected(self, motion_data: Dict):
-        """Callback when motion is detected"""
+    def _start_camera_monitoring(self, camera_name: str):
+        """Start monitoring a camera for motion in a separate thread"""
+        import threading
+        import time
+        
+        def monitor_camera():
+            detector = self.motion_detectors[camera_name]
+            self.motion_threads[camera_name] = True
+            
+            print(f"🎥 Starting motion monitoring for {camera_name}")
+            
+            while self.running and self.motion_threads.get(camera_name, False):
+                try:
+                    # Get current frame from camera
+                    frame = self.camera_manager.get_frame(camera_name)
+                    
+                    # Check for motion
+                    motion_detected = detector.detect_motion(frame)
+                    
+                    if motion_detected:
+                        # Create motion event
+                        timestamp = datetime.now().isoformat()
+                        self._on_vision_motion_detected(camera_name, timestamp, detector)
+                        
+                    # Small delay to avoid overwhelming the system
+                    time.sleep(0.5)  # Check for motion every 0.5 seconds
+                    
+                except Exception as e:
+                    print(f"❌ Error monitoring {camera_name}: {e}")
+                    time.sleep(1)  # Wait longer on error
+                    
+            print(f"🛑 Motion monitoring stopped for {camera_name}")
+        
+        # Start monitoring thread
+        thread = threading.Thread(target=monitor_camera, daemon=True)
+        thread.start()
+        
+    def _on_vision_motion_detected(self, camera_name: str, timestamp: str, detector):
+        """Callback when vision-based motion is detected"""
         try:
-            # Get current timestamp
-            timestamp = datetime.now().isoformat()
+            # Create motion data from vision detection
+            last_motion = detector.get_last_motion_time()
+            motion_data = {
+                'camera': camera_name,
+                'type': 'vision',
+                'confidence': 0.90,  # High confidence for vision detection
+                'duration': 3.0,     # Assume average duration
+                'zone': 'center',
+                'last_motion_time': last_motion.isoformat() if last_motion else timestamp
+            }
             
             # Determine species based on motion characteristics
             species = self._classify_motion(motion_data)
@@ -127,10 +207,10 @@ class SightingService:
             # Notify callbacks (for real-time updates)
             self._notify_sighting_callbacks(sighting)
             
-            print(f"🐿️ New sighting recorded: {species} at {timestamp}")
+            print(f"🐿️ Motion detected! New sighting: {species} on {camera_name} at {timestamp}")
             
         except Exception as e:
-            print(f"❌ Error processing motion detection: {e}")
+            print(f"❌ Error processing vision motion detection: {e}")
             
     def _classify_motion(self, motion_data: Dict) -> str:
         """Simple motion classification - can be enhanced with AI later"""
@@ -244,18 +324,27 @@ class SightingService:
             except Exception as e:
                 print(f"❌ Error in sighting callback: {e}")
                 
-    def get_recent_sightings(self, limit: int = 10) -> list:
-        """Get recent sightings from database"""
+    def get_recent_sightings(self, limit: int = 10, camera: Optional[str] = None) -> list:
+        """Get recent sightings from database, optionally filtered by camera"""
         conn = sqlite3.connect(self.db_path)
         conn.row_factory = sqlite3.Row
         cur = conn.cursor()
         
-        cur.execute('''
-            SELECT timestamp, species, behavior, confidence, camera, motion_zone, clip_path
-            FROM clip_metadata
-            ORDER BY created_at DESC
-            LIMIT ?
-        ''', (limit,))
+        if camera:
+            cur.execute('''
+                SELECT timestamp, species, behavior, confidence, camera, motion_zone, clip_path
+                FROM clip_metadata
+                WHERE camera = ?
+                ORDER BY created_at DESC
+                LIMIT ?
+            ''', (camera, limit))
+        else:
+            cur.execute('''
+                SELECT timestamp, species, behavior, confidence, camera, motion_zone, clip_path
+                FROM clip_metadata
+                ORDER BY created_at DESC
+                LIMIT ?
+            ''', (limit,))
         
         rows = cur.fetchall()
         conn.close()

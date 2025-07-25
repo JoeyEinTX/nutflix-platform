@@ -19,6 +19,21 @@ if CAMERA_AVAILABLE:
     try:
         cam_mgr = CameraManager('nutpod')
         print("[stream_bp] CameraManager initialized successfully")
+        
+        # Connect camera manager to sighting service if available
+        try:
+            import sys
+            import os
+            sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
+            from core.sighting_service import sighting_service
+            
+            # Connect the camera manager to enable motion detection
+            sighting_service.connect_camera_manager(cam_mgr)
+            print("[stream_bp] ✅ Connected camera manager to sighting service")
+            
+        except Exception as e:
+            print(f"[stream_bp] Could not connect to sighting service: {e}")
+            
     except Exception as e:
         print(f"[stream_bp] Failed to initialize CameraManager: {e}")
         cam_mgr = None
@@ -175,6 +190,14 @@ def get_camera_thumbnail(camera_name):
     try:
         frame = cam_mgr.get_frame(camera_name)
         if frame is not None:
+            # Check for motion in the frame using sighting service
+            try:
+                from core.sighting_service import sighting_service
+                sighting_service.check_motion_in_frame(camera_name, frame)
+            except Exception as motion_error:
+                # Don't let motion detection errors break thumbnail generation
+                pass
+                
             # Convert RGB to BGR for OpenCV processing
             if len(frame.shape) == 3 and frame.shape[2] == 3:
                 frame_bgr = cv2.cvtColor(frame, cv2.COLOR_RGB2BGR)

@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 
 const API_BASE = 'http://10.0.0.79:8000/api';
 
-export function useSightings(limit = 10) {
+export function useSightings(limit = 10, camera = null) {
   const [sightings, setSightings] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -10,7 +10,14 @@ export function useSightings(limit = 10) {
   const fetchSightings = async () => {
     try {
       setLoading(true);
-      const response = await fetch(`${API_BASE}/sightings`);
+      
+      // Build URL with query parameters
+      const params = new URLSearchParams();
+      if (limit) params.append('limit', limit);
+      if (camera) params.append('camera', camera);
+      
+      const url = `${API_BASE}/sightings${params.toString() ? '?' + params.toString() : ''}`;
+      const response = await fetch(url);
       
       if (!response.ok) {
         throw new Error(`HTTP error! status: ${response.status}`);
@@ -49,7 +56,7 @@ export function useSightings(limit = 10) {
     const interval = setInterval(fetchSightings, 5000); // Poll every 5 seconds
     
     return () => clearInterval(interval);
-  }, [limit]);
+  }, [limit, camera]); // Re-fetch when camera changes
 
   return { sightings, loading, error, refetch: fetchSightings };
 }

@@ -99,7 +99,7 @@ import numpy as np
 import cv2
 from datetime import datetime, timedelta
 
-class MotionDetector:
+class VisionMotionDetector:
     def __init__(self, motion_sensitivity: float = 0.4, cooldown_sec: float = 1.0):
         self.motion_sensitivity = motion_sensitivity
         self.cooldown = timedelta(seconds=cooldown_sec)

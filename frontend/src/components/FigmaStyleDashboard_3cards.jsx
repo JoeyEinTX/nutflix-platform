@@ -10,8 +10,10 @@ function FigmaStyleDashboard({ systemHealth }) {
   const [modalType, setModalType] = useState(null); // 'header' | 'camera' | 'sighting'
   const [modalData, setModalData] = useState(null);
 
-  // Use real sightings data
-  const { sightings: realSightings, loading: sightingsLoading, error: sightingsError, refetch: refetchSightings } = useSightings(4);
+  // Use real sightings data - separate hooks for each camera
+  const { sightings: critterCamSightings, loading: critterCamLoading, error: critterCamError } = useSightings(3, 'CritterCam');
+  const { sightings: nestCamSightings, loading: nestCamLoading, error: nestCamError } = useSightings(3, 'NestCam');
+  const { sightings: allSightings, loading: allSightingsLoading, error: allSightingsError, refetch: refetchSightings } = useSightings(4);
   const { status: motionStatus, startMotionDetection, stopMotionDetection, triggerTestSighting } = useMotionStatus();
 
   useEffect(() => {
@@ -19,7 +21,44 @@ function FigmaStyleDashboard({ systemHealth }) {
     return () => clearInterval(timer);
   }, []);
 
-  // Mock data for multiple SquirrelBoxes with real sightings
+  // Helper function to get camera-specific sightings with camera name
+  const getCameraSightings = (cameraName) => {
+    const isLoading = critterCamLoading || nestCamLoading;
+    
+    if (cameraName === 'CritterCam') {
+      return isLoading ? [
+        { id: 1, species: "Loading...", time: "", image: "⏳", camera: "CritterCam" }
+      ] : (critterCamSightings.length > 0 ? critterCamSightings.map(s => ({...s, camera: "CritterCam"})) : [
+        { id: 1, species: "No recent sightings", time: "", image: "😴", camera: "CritterCam" }
+      ]);
+    } else if (cameraName === 'NestCam') {
+      return isLoading ? [
+        { id: 1, species: "Loading...", time: "", image: "⏳", camera: "NestCam" }
+      ] : (nestCamSightings.length > 0 ? nestCamSightings.map(s => ({...s, camera: "NestCam"})) : [
+        { id: 1, species: "No recent sightings", time: "", image: "😴", camera: "NestCam" }
+      ]);
+    }
+    
+    // For mixed camera setups, use all sightings
+    return allSightingsLoading ? [
+      { id: 1, species: "Loading...", time: "", image: "⏳" }
+    ] : (allSightings.length > 0 ? allSightings : [
+      { id: 1, species: "No recent sightings", time: "", image: "😴" }
+    ]);
+  };
+
+  // Helper function to get combined recent sightings for a SquirrelBox
+  const getCombinedSightings = (cameras) => {
+    // Use the general all-sightings data which includes both cameras mixed together
+    // and is already sorted by most recent first
+    return allSightingsLoading ? [
+      { id: 1, species: "Loading...", time: "", image: "⏳" }
+    ] : (allSightings.length > 0 ? allSightings : [
+      { id: 1, species: "No recent sightings", time: "", image: "😴" }
+    ]);
+  };
+
+  // Mock data for multiple SquirrelBoxes with camera-specific sightings
   const squirrelBoxes = [
     {
       id: 1,
@@ -33,11 +72,7 @@ function FigmaStyleDashboard({ systemHealth }) {
         { name: "NestCam", location: "Interior", status: "live", thumbnailUrl: "http://10.0.0.79:8000/api/stream/NestCam/thumbnail" },
         { name: "CritterCam", location: "Exterior", status: "live", thumbnailUrl: "http://10.0.0.79:8000/api/stream/CritterCam/thumbnail" }
       ],
-      recentSightings: sightingsLoading ? [
-        { id: 1, species: "Loading...", time: "", image: "⏳" }
-      ] : (realSightings.length > 0 ? realSightings : [
-        { id: 1, species: "No recent sightings", time: "", image: "😴" }
-      ])
+      recentSightings: getCombinedSightings(['NestCam', 'CritterCam'])
     },
     {
       id: 2,
@@ -51,11 +86,7 @@ function FigmaStyleDashboard({ systemHealth }) {
         { name: "NestCam", location: "Interior", status: "live", thumbnailUrl: "http://10.0.0.79:8000/api/stream/NestCam/thumbnail" },
         { name: "CritterCam", location: "Exterior", status: "live", thumbnailUrl: "http://10.0.0.79:8000/api/stream/CritterCam/thumbnail" }
       ],
-      recentSightings: sightingsLoading ? [
-        { id: 1, species: "Loading...", time: "", image: "⏳" }
-      ] : (realSightings.length > 0 ? realSightings : [
-        { id: 1, species: "No recent sightings", time: "", image: "😴" }
-      ])
+      recentSightings: getCombinedSightings(['NestCam', 'CritterCam'])
     },
     {
       id: 3,
@@ -69,11 +100,7 @@ function FigmaStyleDashboard({ systemHealth }) {
         { name: "NestCam", location: "Interior", status: "offline", thumbnailUrl: "http://10.0.0.79:8000/api/stream/NestCam/thumbnail" },
         { name: "CritterCam", location: "Exterior", status: "live", thumbnailUrl: "http://10.0.0.79:8000/api/stream/CritterCam/thumbnail" }
       ],
-      recentSightings: sightingsLoading ? [
-        { id: 1, species: "Loading...", time: "", image: "⏳" }
-      ] : (realSightings.length > 0 ? realSightings : [
-        { id: 1, species: "No recent sightings", time: "", image: "😴" }
-      ])
+      recentSightings: getCombinedSightings(['NestCam', 'CritterCam'])
     }
   ];
 
@@ -282,6 +309,9 @@ function FigmaStyleDashboard({ systemHealth }) {
                       <div style={{ fontSize: '2rem' }}>{s.image}</div>
                       <div style={{ color: '#e0e0e0', fontWeight: 700, fontSize: '0.95rem' }}>{s.species}</div>
                       <div style={{ color: '#8fbc8f', fontSize: '0.8rem' }}>{s.time}</div>
+                      {s.camera && (
+                        <div style={{ color: '#76b900', fontSize: '0.7rem', marginTop: '0.2rem' }}>📹 {s.camera}</div>
+                      )}
                     </div>
                   ))}
                 </div>
@@ -294,6 +324,15 @@ function FigmaStyleDashboard({ systemHealth }) {
               <div style={{ fontSize: '3rem', margin: '1rem 0' }}>{modalData.image}</div>
               <p><strong>Time:</strong> {modalData.time}</p>
               <p><strong>Species:</strong> {modalData.species}</p>
+              {modalData.camera && (
+                <p><strong>Camera:</strong> 📹 {modalData.camera}</p>
+              )}
+              {modalData.behavior && (
+                <p><strong>Behavior:</strong> {modalData.behavior}</p>
+              )}
+              {modalData.confidence && (
+                <p><strong>Confidence:</strong> {Math.round(modalData.confidence * 100)}%</p>
+              )}
             </div>
           )}
         </Modal>
@@ -592,18 +631,18 @@ function FigmaStyleDashboard({ systemHealth }) {
                 🐿️ Recent Sightings
               </h4>
               <div style={{
-                maxHeight: '100px',
+                maxHeight: '160px',
                 overflow: 'hidden'
               }}>
-                {box.recentSightings.slice(0, 3).map((sighting, sightingIndex) => (
+                {box.recentSightings.slice(0, 4).map((sighting, sightingIndex) => (
                   <div
                     key={sighting.id}
                     style={{
                       display: 'flex',
                       justifyContent: 'space-between',
                       alignItems: 'center',
-                      padding: '0.25rem 0',
-                      borderBottom: sightingIndex < 2 ? '1px solid rgba(76, 175, 80, 0.1)' : 'none',
+                      padding: '0.2rem 0',
+                      borderBottom: sightingIndex < 3 ? '1px solid rgba(76, 175, 80, 0.1)' : 'none',
                       cursor: 'pointer'
                     }}
                     onClick={() => {
@@ -615,20 +654,34 @@ function FigmaStyleDashboard({ systemHealth }) {
                     <div style={{
                       display: 'flex',
                       alignItems: 'center',
-                      gap: '0.5rem',
+                      gap: '0.4rem',
                       overflow: 'hidden',
                       minWidth: 0
                     }}>
                       <span style={{ fontSize: '0.8rem' }}>{sighting.image}</span>
-                      <span style={{
-                        fontSize: '0.75rem',
-                        color: '#e0e0e0',
-                        overflow: 'hidden',
-                        textOverflow: 'ellipsis',
-                        whiteSpace: 'nowrap'
-                      }}>
-                        {sighting.species}
-                      </span>
+                      <div style={{ display: 'flex', flexDirection: 'column', overflow: 'hidden', minWidth: 0, gap: '0.2rem' }}>
+                        <span style={{
+                          fontSize: '0.75rem',
+                          color: '#e0e0e0',
+                          overflow: 'hidden',
+                          textOverflow: 'ellipsis',
+                          whiteSpace: 'nowrap',
+                          lineHeight: '1'
+                        }}>
+                          {sighting.species}
+                        </span>
+                        {sighting.camera && (
+                          <span style={{
+                            fontSize: '0.6rem',
+                            color: '#76b900',
+                            opacity: 0.8,
+                            fontWeight: 500,
+                            lineHeight: '1'
+                          }}>
+                            📹 {sighting.camera}
+                          </span>
+                        )}
+                      </div>
                     </div>
                     <span style={{
                       fontSize: '0.7rem',
