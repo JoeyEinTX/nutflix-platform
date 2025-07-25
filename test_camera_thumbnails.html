@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Camera Thumbnail Test</title>
+    <style>
+        body { font-family: Arial, sans-serif; padding: 20px; }
+        .camera { margin: 20px; border: 2px solid #ccc; padding: 10px; display: inline-block; }
+        img { border: 1px solid #000; }
+    </style>
+</head>
+<body>
+    <h1>Camera Thumbnail Test</h1>
+    
+    <div class="camera">
+        <h3>NestCam</h3>
+        <img id="nestcam" src="http://10.0.0.79:8000/api/stream/NestCam/thumbnail" width="160" height="120" alt="NestCam thumbnail">
+        <br>
+        <button onclick="refreshNestCam()">Refresh</button>
+    </div>
+    
+    <div class="camera">
+        <h3>CritterCam</h3>
+        <img id="crittercam" src="http://10.0.0.79:8000/api/stream/CritterCam/thumbnail" width="160" height="120" alt="CritterCam thumbnail">
+        <br>
+        <button onclick="refreshCritterCam()">Refresh</button>
+    </div>
+    
+    <script>
+        function refreshNestCam() {
+            document.getElementById('nestcam').src = 'http://10.0.0.79:8000/api/stream/NestCam/thumbnail?t=' + Date.now();
+        }
+        
+        function refreshCritterCam() {
+            document.getElementById('crittercam').src = 'http://10.0.0.79:8000/api/stream/CritterCam/thumbnail?t=' + Date.now();
+        }
+        
+        // Auto-refresh every 2 seconds
+        setInterval(function() {
+            refreshNestCam();
+            refreshCritterCam();
+        }, 2000);
+    </script>
+</body>
+</html>

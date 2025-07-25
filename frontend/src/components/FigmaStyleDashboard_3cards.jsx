@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useSightings, useMotionStatus } from '../hooks/useSightings';
 
 function FigmaStyleDashboard({ systemHealth }) {
   // Camera modal state
@@ -9,12 +10,16 @@ function FigmaStyleDashboard({ systemHealth }) {
   const [modalType, setModalType] = useState(null); // 'header' | 'camera' | 'sighting'
   const [modalData, setModalData] = useState(null);
 
+  // Use real sightings data
+  const { sightings: realSightings, loading: sightingsLoading, error: sightingsError, refetch: refetchSightings } = useSightings(4);
+  const { status: motionStatus, startMotionDetection, stopMotionDetection, triggerTestSighting } = useMotionStatus();
+
   useEffect(() => {
     const timer = setInterval(() => setCurrentTime(new Date()), 1000);
     return () => clearInterval(timer);
   }, []);
 
-  // Mock data for multiple SquirrelBoxes
+  // Mock data for multiple SquirrelBoxes with real sightings
   const squirrelBoxes = [
     {
       id: 1,
@@ -25,15 +30,14 @@ function FigmaStyleDashboard({ systemHealth }) {
       storage: systemHealth.storage,
       batteryLevel: 87,
       cameras: [
-        { name: "NestCam", location: "Interior", status: "live" },
-        { name: "OuterCam", location: "Exterior", status: "live" }
+        { name: "NestCam", location: "Interior", status: "live", thumbnailUrl: "http://10.0.0.79:8000/api/stream/NestCam/thumbnail" },
+        { name: "CritterCam", location: "Exterior", status: "live", thumbnailUrl: "http://10.0.0.79:8000/api/stream/CritterCam/thumbnail" }
       ],
-      recentSightings: [
-        { id: 1, species: "Eastern Gray Squirrel", time: "2 min ago", image: "🐿️" },
-        { id: 2, species: "Red Squirrel", time: "15 min ago", image: "🐿️" },
-        { id: 3, species: "Flying Squirrel", time: "1 hour ago", image: "🐿️" },
-        { id: 4, species: "Chipmunk", time: "2 hours ago", image: "🐿️" }
-      ]
+      recentSightings: sightingsLoading ? [
+        { id: 1, species: "Loading...", time: "", image: "⏳" }
+      ] : (realSightings.length > 0 ? realSightings : [
+        { id: 1, species: "No recent sightings", time: "", image: "😴" }
+      ])
     },
     {
       id: 2,
@@ -44,14 +48,14 @@ function FigmaStyleDashboard({ systemHealth }) {
       storage: 62,
       batteryLevel: 94,
       cameras: [
-        { name: "NestCam", location: "Interior", status: "live" },
-        { name: "OuterCam", location: "Exterior", status: "live" }
+        { name: "NestCam", location: "Interior", status: "live", thumbnailUrl: "http://10.0.0.79:8000/api/stream/NestCam/thumbnail" },
+        { name: "CritterCam", location: "Exterior", status: "live", thumbnailUrl: "http://10.0.0.79:8000/api/stream/CritterCam/thumbnail" }
       ],
-      recentSightings: [
-        { id: 1, species: "Gray Squirrel", time: "5 min ago", image: "🐿️" },
-        { id: 2, species: "Blue Jay", time: "20 min ago", image: "🐦" },
-        { id: 3, species: "Cardinal", time: "45 min ago", image: "🐦" }
-      ]
+      recentSightings: sightingsLoading ? [
+        { id: 1, species: "Loading...", time: "", image: "⏳" }
+      ] : (realSightings.length > 0 ? realSightings : [
+        { id: 1, species: "No recent sightings", time: "", image: "😴" }
+      ])
     },
     {
       id: 3,
@@ -62,13 +66,14 @@ function FigmaStyleDashboard({ systemHealth }) {
       storage: 89,
       batteryLevel: 76,
       cameras: [
-        { name: "NestCam", location: "Interior", status: "offline" },
-        { name: "OuterCam", location: "Exterior", status: "live" }
+        { name: "NestCam", location: "Interior", status: "offline", thumbnailUrl: "http://10.0.0.79:8000/api/stream/NestCam/thumbnail" },
+        { name: "CritterCam", location: "Exterior", status: "live", thumbnailUrl: "http://10.0.0.79:8000/api/stream/CritterCam/thumbnail" }
       ],
-      recentSightings: [
-        { id: 1, species: "Red Squirrel", time: "1 min ago", image: "🐿️" },
-        { id: 2, species: "Flying Squirrel", time: "3 hours ago", image: "🐿️" }
-      ]
+      recentSightings: sightingsLoading ? [
+        { id: 1, species: "Loading...", time: "", image: "⏳" }
+      ] : (realSightings.length > 0 ? realSightings : [
+        { id: 1, species: "No recent sightings", time: "", image: "😴" }
+      ])
     }
   ];
 
@@ -144,9 +149,33 @@ function FigmaStyleDashboard({ systemHealth }) {
                         alignItems: 'center',
                         justifyContent: 'center',
                         marginBottom: '0.2rem',
-                        border: `2px solid ${cam.status === 'live' ? '#76b900' : '#888'}`
+                        border: `2px solid ${cam.status === 'live' ? '#76b900' : '#888'}`,
+                        overflow: 'hidden'
                       }}>
-                        <span style={{ fontSize: '1.5rem', color: cam.status === 'live' ? '#76b900' : '#888' }}>📹</span>
+                        {cam.status === 'live' && cam.thumbnailUrl ? (
+                          <img 
+                            src={`${cam.thumbnailUrl}?t=${Date.now()}`}
+                            alt={`${cam.name} thumbnail`}
+                            style={{
+                              width: '100%',
+                              height: '100%',
+                              objectFit: 'cover'
+                            }}
+                            onError={(e) => {
+                              e.target.style.display = 'none';
+                              e.target.nextSibling.style.display = 'block';
+                            }}
+                          />
+                        ) : null}
+                        <span 
+                          style={{ 
+                            fontSize: '1.5rem', 
+                            color: cam.status === 'live' ? '#76b900' : '#888',
+                            display: (cam.status === 'live' && cam.thumbnailUrl) ? 'none' : 'block'
+                          }}
+                        >
+                          📹
+                        </span>
                       </div>
                       <span style={{ fontSize: '0.7rem', color: '#e0e0e0' }}>{cam.name}</span>
                     </div>
@@ -289,6 +318,59 @@ function FigmaStyleDashboard({ systemHealth }) {
           color: '#8fbc8f'
         }}>
           {squirrelBoxes.length} devices active
+        </div>
+        
+        {/* Motion Detection Status */}
+        <div style={{
+          display: 'flex',
+          alignItems: 'center',
+          gap: '0.5rem',
+          fontSize: '0.85rem',
+          marginTop: '0.5rem',
+          color: motionStatus.running ? '#4CAF50' : '#FF9800'
+        }}>
+          <span>{motionStatus.running ? '🟢' : '🟡'}</span>
+          <span>
+            Motion Detection: {motionStatus.running ? 'Active' : 'Inactive'}
+            {motionStatus.recent_sightings_count > 0 && ` (${motionStatus.recent_sightings_count} recent)`}
+          </span>
+          {!motionStatus.running && (
+            <button
+              onClick={startMotionDetection}
+              style={{
+                background: '#4CAF50',
+                color: 'white',
+                border: 'none',
+                padding: '2px 8px',
+                borderRadius: '4px',
+                fontSize: '0.75rem',
+                cursor: 'pointer',
+                marginLeft: '0.5rem'
+              }}
+            >
+              Start
+            </button>
+          )}
+          <button
+            onClick={async () => {
+              const result = await triggerTestSighting();
+              if (result) {
+                setTimeout(() => refetchSightings(), 500); // Refresh sightings after delay
+              }
+            }}
+            style={{
+              background: '#2196F3',
+              color: 'white',
+              border: 'none',
+              padding: '2px 8px',
+              borderRadius: '4px',
+              fontSize: '0.75rem',
+              cursor: 'pointer',
+              marginLeft: '0.5rem'
+            }}
+          >
+            Test Sighting
+          </button>
         </div>
       </div>
 
@@ -439,11 +521,30 @@ function FigmaStyleDashboard({ systemHealth }) {
                       </div>
                     )}
                     
-                    {/* Camera Feed Placeholder */}
+                    {/* Camera Feed */}
+                    {camera.status === 'live' && camera.thumbnailUrl ? (
+                      <img 
+                        src={`${camera.thumbnailUrl}?t=${Date.now()}`}
+                        alt={`${camera.name} live feed`}
+                        style={{
+                          width: '100%',
+                          height: '100%',
+                          objectFit: 'cover',
+                          borderRadius: '6px'
+                        }}
+                        onError={(e) => {
+                          // Show fallback if image fails to load
+                          e.target.style.display = 'none';
+                          e.target.nextSibling.style.display = 'flex';
+                        }}
+                      />
+                    ) : null}
+                    
+                    {/* Fallback display */}
                     <div style={{
                       width: '100%',
                       height: '100%',
-                      display: 'flex',
+                      display: (!camera.thumbnailUrl || camera.status !== 'live') ? 'flex' : 'none',
                       flexDirection: 'column',
                       justifyContent: 'center',
                       alignItems: 'center',

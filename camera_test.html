@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Camera Test</title>
+    <style>
+        body { background: #1a1a1a; color: white; font-family: Arial; }
+        .camera-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; padding: 20px; }
+        .camera-box { border: 2px solid #4CAF50; border-radius: 8px; padding: 10px; }
+        .camera-box img { width: 100%; height: 200px; object-fit: cover; border-radius: 4px; }
+        .refresh-btn { background: #4CAF50; color: white; border: none; padding: 10px; border-radius: 4px; cursor: pointer; }
+    </style>
+</head>
+<body>
+    <h1>🎯 NutFlix Camera Feed Test</h1>
+    
+    <div class="camera-grid">
+        <div class="camera-box">
+            <h3>📹 NestCam (Interior)</h3>
+            <img id="nestcam" src="http://10.0.0.79:8000/api/stream/NestCam/thumbnail" alt="NestCam Live Feed">
+            <button class="refresh-btn" onclick="refreshNestCam()">🔄 Refresh</button>
+        </div>
+        
+        <div class="camera-box">
+            <h3>📹 CritterCam (Exterior)</h3>
+            <img id="crittercam" src="http://10.0.0.79:8000/api/stream/CritterCam/thumbnail" alt="CritterCam Live Feed">
+            <button class="refresh-btn" onclick="refreshCritterCam()">🔄 Refresh</button>
+        </div>
+    </div>
+    
+    <div style="margin: 20px;">
+        <button class="refresh-btn" onclick="autoRefresh()">🔄 Auto-Refresh Every 2 Seconds</button>
+        <button class="refresh-btn" onclick="stopRefresh()">⏹️ Stop Auto-Refresh</button>
+    </div>
+    
+    <script>
+        let refreshInterval;
+        
+        function refreshNestCam() {
+            const img = document.getElementById('nestcam');
+            img.src = `http://10.0.0.79:8000/api/stream/NestCam/thumbnail?t=${Date.now()}`;
+        }
+        
+        function refreshCritterCam() {
+            const img = document.getElementById('crittercam');
+            img.src = `http://10.0.0.79:8000/api/stream/CritterCam/thumbnail?t=${Date.now()}`;
+        }
+        
+        function refreshBoth() {
+            refreshNestCam();
+            refreshCritterCam();
+        }
+        
+        function autoRefresh() {
+            if (refreshInterval) clearInterval(refreshInterval);
+            refreshInterval = setInterval(refreshBoth, 2000);
+            console.log('Auto-refresh started');
+        }
+        
+        function stopRefresh() {
+            if (refreshInterval) {
+                clearInterval(refreshInterval);
+                refreshInterval = null;
+                console.log('Auto-refresh stopped');
+            }
+        }
+        
+        // Auto-refresh on load
+        setTimeout(autoRefresh, 1000);
+    </script>
+</body>
+</html>

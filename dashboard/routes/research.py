@@ -1,6 +1,17 @@
 from flask import Blueprint, render_template, jsonify
 # from dashboard.services.analytics import get_recent_sightings, get_recent_env_readings
 
+# Import sighting service
+try:
+    import sys
+    import os
+    sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
+    from core.sighting_service import sighting_service
+    SIGHTING_SERVICE_AVAILABLE = True
+except ImportError as e:
+    print(f"Sighting service not available in research routes: {e}")
+    SIGHTING_SERVICE_AVAILABLE = False
+
 research_bp = Blueprint('research', __name__, template_folder='../templates/research')
 
 def get_mock_sightings(limit=100):
@@ -61,13 +72,19 @@ def research_index():
 
 @research_bp.route('/research/sightings')
 def research_sightings():
-    sightings = get_mock_sightings(100)
+    if SIGHTING_SERVICE_AVAILABLE:
+        sightings = sighting_service.get_recent_sightings(100)
+    else:
+        sightings = get_mock_sightings(100)
     return render_template('research/sightings.html', sightings=sightings)
 
 # API endpoint for React: /api/research/sightings
 @research_bp.route('/api/research/sightings')
 def api_research_sightings():
-    sightings = get_mock_sightings(100)
+    if SIGHTING_SERVICE_AVAILABLE:
+        sightings = sighting_service.get_recent_sightings(100)
+    else:
+        sightings = get_mock_sightings(100)
     return jsonify(sightings)
 
 @research_bp.route('/research/trends')
