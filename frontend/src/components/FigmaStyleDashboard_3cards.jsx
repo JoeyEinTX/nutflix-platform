@@ -1,7 +1,13 @@
 import React, { useState, useEffect } from 'react';
 
 function FigmaStyleDashboard({ systemHealth }) {
+  // Camera modal state
+  const [selectedSighting, setSelectedSighting] = useState(null);
   const [currentTime, setCurrentTime] = useState(new Date());
+  // Modal state
+  const [modalOpen, setModalOpen] = useState(false);
+  const [modalType, setModalType] = useState(null); // 'header' | 'camera' | 'sighting'
+  const [modalData, setModalData] = useState(null);
 
   useEffect(() => {
     const timer = setInterval(() => setCurrentTime(new Date()), 1000);
@@ -19,8 +25,8 @@ function FigmaStyleDashboard({ systemHealth }) {
       storage: systemHealth.storage,
       batteryLevel: 87,
       cameras: [
-        { name: "CritterCam", location: "Wildlife Area", status: "live" },
-        { name: "NestCam", location: "Nesting Box", status: "live" }
+        { name: "NestCam", location: "Interior", status: "live" },
+        { name: "OuterCam", location: "Exterior", status: "live" }
       ],
       recentSightings: [
         { id: 1, species: "Eastern Gray Squirrel", time: "2 min ago", image: "🐿️" },
@@ -38,8 +44,8 @@ function FigmaStyleDashboard({ systemHealth }) {
       storage: 62,
       batteryLevel: 94,
       cameras: [
-        { name: "CritterCam", location: "Wildlife Area", status: "offline" },
-        { name: "NestCam", location: "Nesting Box", status: "offline" }
+        { name: "NestCam", location: "Interior", status: "live" },
+        { name: "OuterCam", location: "Exterior", status: "live" }
       ],
       recentSightings: [
         { id: 1, species: "Gray Squirrel", time: "5 min ago", image: "🐿️" },
@@ -67,8 +73,9 @@ function FigmaStyleDashboard({ systemHealth }) {
   ];
 
   const handleBoxClick = (boxId) => {
-    console.log(`Opening modal for SquirrelBox: ${boxId}`);
-    alert(`Opening detailed view for ${squirrelBoxes.find(box => box.id === boxId)?.name}`);
+    setModalType('header');
+    setModalData(squirrelBoxes.find(box => box.id === boxId));
+    setModalOpen(true);
   };
 
   return (
@@ -78,6 +85,190 @@ function FigmaStyleDashboard({ systemHealth }) {
       minHeight: '100vh',
       color: '#e0e0e0' 
     }}>
+      {/* Modal */}
+      {modalOpen && (
+        <Modal open={modalOpen} onClose={() => setModalOpen(false)}>
+          {modalType === 'header' && modalData && (
+            <div style={{ display: 'flex', flexDirection: 'row', gap: '2rem', minWidth: '400px' }}>
+              {/* Sidebar: Sensor Data */}
+              <div style={{ minWidth: '140px', background: 'rgba(46,204,113,0.05)', borderRadius: '10px', padding: '1rem 0.75rem', display: 'flex', flexDirection: 'column', alignItems: 'flex-start', justifyContent: 'flex-start', boxShadow: '0 2px 8px rgba(76,175,80,0.05)', marginRight: '1rem' }}>
+                {/* Health Indicator */}
+                <div style={{ display: 'flex', alignItems: 'center', marginBottom: '0.7rem' }}>
+                  <span style={{
+                    display: 'inline-block',
+                    width: '12px',
+                    height: '12px',
+                    borderRadius: '50%',
+                    background: (modalData.batteryLevel > 50 && modalData.storage > 30) ? '#76b900' : (modalData.batteryLevel > 20 ? '#f39c12' : '#dc3545'),
+                    marginRight: '0.4rem',
+                    border: '2px solid #223a2c'
+                  }}></span>
+                  <span style={{ fontWeight: 700, color: '#e0e0e0', fontSize: '1rem' }}>{modalData.name}</span>
+                </div>
+                <div style={{ fontSize: '0.85rem', color: '#8fbc8f', marginBottom: '0.5rem' }}>📍 {modalData.location}</div>
+                <div style={{ fontSize: '0.85rem', color: '#f39c12', marginBottom: '0.3rem' }}>🌡️ {Number(modalData.temperature).toFixed(1)}°C</div>
+                <div style={{ fontSize: '0.85rem', color: '#3498db', marginBottom: '0.3rem' }}>💧 {Number(modalData.humidity).toFixed(1)}%</div>
+                <div style={{ fontSize: '0.85rem', color: '#76b900', marginBottom: '0.3rem' }}>🔋 {modalData.batteryLevel}%</div>
+                <div style={{ fontSize: '0.85rem', color: '#e67e22', marginBottom: '0.3rem' }}>💾 {modalData.storage}%</div>
+                {/* Progress Bars */}
+                <div style={{ width: '100%', marginTop: '0.5rem' }}>
+                  <div style={{ fontSize: '0.7rem', color: '#8fbc8f' }}>Battery</div>
+                  <div style={{ background: '#223a2c', borderRadius: '4px', height: '6px', width: '100%' }}>
+                    <div style={{ background: '#76b900', height: '6px', borderRadius: '4px', width: `${modalData.batteryLevel}%` }}></div>
+                  </div>
+                  <div style={{ fontSize: '0.7rem', color: '#8fbc8f', marginTop: '0.3rem' }}>Storage</div>
+                  <div style={{ background: '#223a2c', borderRadius: '4px', height: '6px', width: '100%' }}>
+                    <div style={{ background: '#e67e22', height: '6px', borderRadius: '4px', width: `${modalData.storage}%` }}></div>
+                  </div>
+                </div>
+              </div>
+              {/* Main Info */}
+              <div style={{ flex: 1, display: 'flex', flexDirection: 'column', justifyContent: 'flex-start' }}>
+                {/* Last Sighting */}
+                <div style={{ marginBottom: '0.7rem', textAlign: 'left' }}>
+                  <span style={{ color: '#8fbc8f', fontSize: '0.95rem' }}>Last Sighting:</span>
+                  <span style={{ color: '#e0e0e0', fontWeight: 700, fontSize: '1.05rem', marginLeft: '0.5rem' }}>{modalData.recentSightings[0]?.species || 'N/A'}</span>
+                  <span style={{ fontSize: '1.2rem', marginLeft: '0.5rem' }}>{modalData.recentSightings[0]?.image || ''}</span>
+                  <span style={{ color: '#8fbc8f', fontSize: '0.9rem', marginLeft: '0.5rem' }}>{modalData.recentSightings[0]?.time || ''}</span>
+                </div>
+                {/* Camera Feed Thumbnails */}
+                <div style={{ display: 'flex', gap: '1.2rem', justifyContent: 'flex-start', alignItems: 'center', marginBottom: '0.7rem' }}>
+                  {modalData.cameras.map((cam, idx) => (
+                    <div key={idx} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', cursor: 'pointer' }}>
+                      <div style={{
+                        width: '48px',
+                        height: '32px',
+                        background: cam.status === 'live' ? 'radial-gradient(circle, rgba(76,175,80,0.15), transparent)' : 'rgba(60,60,60,0.5)',
+                        borderRadius: '6px',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        marginBottom: '0.2rem',
+                        border: `2px solid ${cam.status === 'live' ? '#76b900' : '#888'}`
+                      }}>
+                        <span style={{ fontSize: '1.5rem', color: cam.status === 'live' ? '#76b900' : '#888' }}>📹</span>
+                      </div>
+                      <span style={{ fontSize: '0.7rem', color: '#e0e0e0' }}>{cam.name}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          )}
+          {modalType === 'camera' && modalData && (
+            <div>
+              <h2 style={{ color: '#76b900', marginBottom: '1rem' }}>{modalData.name} Camera</h2>
+              <p><strong>Location:</strong> {modalData.location}</p>
+              <p><strong>Status:</strong> {modalData.status}</p>
+              {/* Live View or Sighting Clip */}
+              {!selectedSighting ? (
+                <div style={{
+                  width: '100%',
+                  height: '400px',
+                  maxWidth: '800px',
+                  background: modalData.status === 'live' ? 'radial-gradient(circle, rgba(76,175,80,0.15), transparent)' : 'rgba(60,60,60,0.5)',
+                  borderRadius: '16px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  margin: '1.5rem auto',
+                  position: 'relative',
+                  boxShadow: '0 8px 32px rgba(0,0,0,0.2)'
+                }}>
+                  {modalData.status === 'live' ? (
+                    <span style={{ fontSize: '5rem', color: '#76b900', opacity: 0.7 }}>📹</span>
+                  ) : (
+                    <span style={{ fontSize: '3rem', color: '#888' }}>OFFLINE</span>
+                  )}
+                  {/* LIVE badge */}
+                  {modalData.status === 'live' && (
+                    <div style={{
+                      position: 'absolute',
+                      top: '16px',
+                      right: '16px',
+                      background: '#dc3545',
+                      color: 'white',
+                      fontSize: '0.9rem',
+                      padding: '4px 12px',
+                      borderRadius: '6px',
+                      fontWeight: 'bold',
+                      boxShadow: '0 2px 8px rgba(76,175,80,0.08)'
+                    }}>LIVE</div>
+                  )}
+                </div>
+              ) : (
+                <div style={{
+                  width: '100%',
+                  minHeight: '220px',
+                  background: 'rgba(46,204,113,0.08)',
+                  borderRadius: '12px',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  margin: '1rem 0',
+                  boxShadow: '0 4px 16px rgba(0,0,0,0.2)'
+                }}>
+                  <div style={{ fontSize: '4rem', marginBottom: '1rem' }}>{selectedSighting.image}</div>
+                  <div style={{ color: '#e0e0e0', fontWeight: 700, fontSize: '1.2rem' }}>{selectedSighting.species}</div>
+                  <div style={{ color: '#8fbc8f', fontSize: '1rem', marginBottom: '0.5rem' }}>{selectedSighting.time}</div>
+                  <button
+                    onClick={() => setSelectedSighting(null)}
+                    style={{
+                      background: 'rgba(46,204,113,0.15)',
+                      color: '#76b900',
+                      border: 'none',
+                      borderRadius: '6px',
+                      padding: '0.5rem 1.2rem',
+                      cursor: 'pointer',
+                      fontWeight: '700',
+                      fontSize: '1rem',
+                      marginTop: '1rem',
+                      boxShadow: '0 2px 8px rgba(76,175,80,0.08)'
+                    }}
+                  >
+                    ← Back to Live View
+                  </button>
+                </div>
+              )}
+              {/* Recent Sightings Carousel */}
+              <div style={{ marginTop: '2rem' }}>
+                <h3 style={{ color: '#76b900', fontSize: '1.1rem', marginBottom: '0.5rem' }}>Recent Sightings</h3>
+                <div style={{ display: 'flex', gap: '1rem', overflowX: 'auto', paddingBottom: '0.5rem' }}>
+                  {(modalData.recentSightings || []).map((s, idx) => (
+                    <div
+                      key={idx}
+                      style={{
+                        background: 'rgba(46,204,113,0.08)',
+                        borderRadius: '8px',
+                        padding: '0.5rem 1rem',
+                        minWidth: '90px',
+                        textAlign: 'center',
+                        cursor: 'pointer',
+                        border: selectedSighting && selectedSighting.id === s.id ? '2px solid #76b900' : '2px solid transparent',
+                        boxShadow: selectedSighting && selectedSighting.id === s.id ? '0 2px 8px rgba(76,175,80,0.08)' : 'none'
+                      }}
+                      onClick={() => setSelectedSighting(s)}
+                    >
+                      <div style={{ fontSize: '2rem' }}>{s.image}</div>
+                      <div style={{ color: '#e0e0e0', fontWeight: 700, fontSize: '0.95rem' }}>{s.species}</div>
+                      <div style={{ color: '#8fbc8f', fontSize: '0.8rem' }}>{s.time}</div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          )}
+          {modalType === 'sighting' && modalData && (
+            <div>
+              <h2 style={{ color: '#76b900', marginBottom: '1rem' }}>Sighting: {modalData.species}</h2>
+              <div style={{ fontSize: '3rem', margin: '1rem 0' }}>{modalData.image}</div>
+              <p><strong>Time:</strong> {modalData.time}</p>
+              <p><strong>Species:</strong> {modalData.species}</p>
+            </div>
+          )}
+        </Modal>
+      )}
       {/* Header */}
       <div style={{ 
         display: 'flex', 
@@ -102,11 +293,14 @@ function FigmaStyleDashboard({ systemHealth }) {
       </div>
 
       {/* 3-Card Layout */}
-      <div style={{
-        display: 'flex',
+      <div className="dashboard-grid" style={{
+        display: 'grid',
         gap: '1.5rem',
         alignItems: 'stretch',
-        minHeight: '450px'
+        minHeight: '450px',
+        gridTemplateColumns: '1fr',
+        maxWidth: '1200px',
+        margin: '0 auto',
       }}>
         {squirrelBoxes.map((box, index) => (
           <div 
@@ -124,7 +318,13 @@ function FigmaStyleDashboard({ systemHealth }) {
               display: 'flex',
               flexDirection: 'column'
             }}
-            onClick={() => handleBoxClick(box.id)}
+            // Card header click
+            onClick={(e) => {
+              // Only trigger modal if header or card background is clicked
+              if (e.target.closest('.card-header')) {
+                handleBoxClick(box.id);
+              }
+            }}
             onMouseEnter={(e) => {
               e.currentTarget.style.transform = 'translateY(-4px)';
               e.currentTarget.style.boxShadow = '0 8px 24px rgba(0, 0, 0, 0.4)';
@@ -137,11 +337,18 @@ function FigmaStyleDashboard({ systemHealth }) {
             }}
           >
             {/* Card Header */}
-            <div style={{
+            <div className="card-header" style={{
               marginBottom: '1rem',
               paddingBottom: '0.75rem',
-              borderBottom: '1px solid rgba(76, 175, 80, 0.2)'
-            }}>
+              borderBottom: '1px solid rgba(76, 175, 80, 0.2)',
+              cursor: 'pointer'
+            }}
+              onClick={() => {
+                setModalType('header');
+                setModalData(box);
+                setModalOpen(true);
+              }}
+            >
               <h3 style={{
                 fontSize: '1.25rem',
                 color: '#f0f0f0',
@@ -196,6 +403,11 @@ function FigmaStyleDashboard({ systemHealth }) {
                       cursor: 'pointer',
                       transition: 'all 0.2s ease'
                     }}
+                    onClick={() => {
+                      setModalType('camera');
+                      setModalData({ ...camera, name: box.name, location: camera.location });
+                      setModalOpen(true);
+                    }}
                     onMouseEnter={(e) => {
                       if (camera.status === 'live') {
                         e.target.style.borderColor = '#8fbc8f';
@@ -227,7 +439,7 @@ function FigmaStyleDashboard({ systemHealth }) {
                       </div>
                     )}
                     
-                    {/* Camera Feed with Real Thumbnails */}
+                    {/* Camera Feed Placeholder */}
                     <div style={{
                       width: '100%',
                       height: '100%',
@@ -236,120 +448,32 @@ function FigmaStyleDashboard({ systemHealth }) {
                       justifyContent: 'center',
                       alignItems: 'center',
                       background: camera.status === 'live' 
-                        ? 'rgba(20, 30, 40, 0.9)' 
-                        : 'rgba(60, 60, 60, 0.5)',
-                      position: 'relative',
-                      overflow: 'hidden'
+                        ? 'radial-gradient(circle, rgba(76, 175, 80, 0.1), transparent)' 
+                        : 'rgba(60, 60, 60, 0.5)'
                     }}>
-                      
-                      {/* Live Camera Thumbnail */}
-                      {camera.status === 'live' ? (
-                        <img 
-                          src={`/api/stream/${camera.name}/thumbnail?t=${Math.floor(Date.now() / 5000)}`}
-                          alt={`${camera.name} live feed`}
-                          style={{
-                            width: '100%',
-                            height: '100%',
-                            objectFit: 'cover',
-                            opacity: 0.9
-                          }}
-                          onError={(e) => {
-                            // Fallback to recent activity thumbnail if live feed fails
-                            e.target.src = camera.name === 'CritterCam' ? '/api/clips/clip_001/thumbnail' : '/api/clips/clip_002/thumbnail';
-                          }}
-                        />
-                      ) : (
-                        /* Recent Activity Thumbnail for Offline Cameras */
-                        <div style={{
-                          width: '100%',
-                          height: '100%',
-                          display: 'flex',
-                          flexDirection: 'column',
-                          justifyContent: 'center',
-                          alignItems: 'center',
-                          position: 'relative'
-                        }}>
-                          <img 
-                            src={camera.name === 'CritterCam' ? '/api/clips/clip_001/thumbnail' : '/api/clips/clip_002/thumbnail'}
-                            alt="Last activity snapshot"
-                            style={{
-                              width: '100%',
-                              height: '100%',
-                              objectFit: 'cover',
-                              opacity: 0.6,
-                              filter: 'grayscale(30%)'
-                            }}
-                            onError={(e) => {
-                              // If thumbnail fails, show placeholder
-                              e.target.style.display = 'none';
-                              e.target.nextSibling.style.display = 'flex';
-                            }}
-                          />
-                          {/* Fallback placeholder if image fails */}
-                          <div style={{
-                            position: 'absolute',
-                            width: '100%',
-                            height: '100%',
-                            display: 'none',
-                            flexDirection: 'column',
-                            justifyContent: 'center',
-                            alignItems: 'center'
-                          }}>
-                            <div style={{
-                              fontSize: '2.5rem',
-                              color: '#666',
-                              opacity: 0.7,
-                              marginBottom: '0.25rem'
-                            }}>
-                              📹
-                            </div>
-                            <div style={{
-                              fontSize: '0.8rem',
-                              color: '#888',
-                              textAlign: 'center',
-                              fontWeight: 600
-                            }}>
-                              {camera.name}
-                            </div>
-                          </div>
-                          
-                          {/* "Last Activity" overlay */}
-                          <div style={{
-                            position: 'absolute',
-                            bottom: '8px',
-                            left: '50%',
-                            transform: 'translateX(-50%)',
-                            fontSize: '0.6rem',
-                            color: 'rgba(255, 255, 255, 0.9)',
-                            background: 'rgba(0, 0, 0, 0.7)',
-                            padding: '2px 6px',
-                            borderRadius: '3px',
-                            textAlign: 'center',
-                            fontWeight: 'bold'
-                          }}>
-                            Last Activity<br/>
-                            {camera.name === 'CritterCam' ? '2:30 PM' : '12:15 PM'}
-                          </div>
-                        </div>
-                      )}
-                      
-                      {/* Live overlay indicators */}
-                      {camera.status === 'live' && (
-                        <div style={{
-                          position: 'absolute',
-                          bottom: '4px',
-                          left: '4px',
-                          fontSize: '0.6rem',
-                          color: 'rgba(255, 255, 255, 0.9)',
-                          background: 'rgba(0, 0, 0, 0.7)',
-                          padding: '1px 4px',
-                          borderRadius: '2px',
-                          fontFamily: 'monospace',
-                          fontWeight: 'bold'
-                        }}>
-                          LIVE {new Date().toLocaleTimeString().slice(0, 8)}
-                        </div>
-                      )}
+                      <div style={{
+                        fontSize: '2.5rem',
+                        color: camera.status === 'live' ? '#8fbc8f' : '#666',
+                        opacity: 0.7,
+                        marginBottom: '0.25rem'
+                      }}>
+                        📹
+                      </div>
+                      <div style={{
+                        fontSize: '0.8rem',
+                        color: camera.status === 'live' ? '#e0e0e0' : '#888',
+                        textAlign: 'center',
+                        fontWeight: 600
+                      }}>
+                        {camera.name}
+                      </div>
+                      <div style={{ 
+                        fontSize: '0.7rem', 
+                        color: '#888',
+                        textAlign: 'center'
+                      }}>
+                        {camera.location}
+                      </div>
                     </div>
                   </div>
                 ))}
@@ -378,7 +502,13 @@ function FigmaStyleDashboard({ systemHealth }) {
                       justifyContent: 'space-between',
                       alignItems: 'center',
                       padding: '0.25rem 0',
-                      borderBottom: sightingIndex < 2 ? '1px solid rgba(76, 175, 80, 0.1)' : 'none'
+                      borderBottom: sightingIndex < 2 ? '1px solid rgba(76, 175, 80, 0.1)' : 'none',
+                      cursor: 'pointer'
+                    }}
+                    onClick={() => {
+                      setModalType('sighting');
+                      setModalData(sighting);
+                      setModalOpen(true);
                     }}
                   >
                     <div style={{
@@ -414,6 +544,14 @@ function FigmaStyleDashboard({ systemHealth }) {
           </div>
         ))}
       </div>
+      {/* Responsive grid CSS */}
+      <style>{`
+        @media (min-width: 900px) {
+          .dashboard-grid {
+            grid-template-columns: repeat(3, 1fr) !important;
+          }
+        }
+      `}</style>
 
       {/* Status Bar */}
       <div style={{
@@ -438,5 +576,6 @@ function FigmaStyleDashboard({ systemHealth }) {
     </div>
   );
 }
+import Modal from './Modal';
 
 export default FigmaStyleDashboard;
