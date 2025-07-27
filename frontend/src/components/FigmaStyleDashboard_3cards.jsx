@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useSightings, useMotionStatus } from '../hooks/useSightings';
+import { useSightings } from '../hooks/useSightings';
 
 function FigmaStyleDashboard({ systemHealth }) {
   // Camera modal state
@@ -9,16 +9,152 @@ function FigmaStyleDashboard({ systemHealth }) {
   const [modalOpen, setModalOpen] = useState(false);
   const [modalType, setModalType] = useState(null); // 'header' | 'camera' | 'sighting'
   const [modalData, setModalData] = useState(null);
+  // Real system data
+  const [realSystemData, setRealSystemData] = useState(null);
+  
+  // Camera data state for static previews
+  const [cameraData, setCameraData] = useState({
+    'camera-1': { has_clip: false, last_seen_minutes: null, thumbnail_url: null, loading: true, error: null },
+    'camera-2': { has_clip: false, last_seen_minutes: null, thumbnail_url: null, loading: true, error: null },
+    'camera-3': { has_clip: false, last_seen_minutes: null, thumbnail_url: null, loading: true, error: null },
+    'camera-4': { has_clip: false, last_seen_minutes: null, thumbnail_url: null, loading: true, error: null },
+    'camera-5': { has_clip: false, last_seen_minutes: null, thumbnail_url: null, loading: true, error: null },
+    'camera-6': { has_clip: false, last_seen_minutes: null, thumbnail_url: null, loading: true, error: null }
+  });
+
+  // Fetch camera data from latest clip API
+  const fetchCameraData = async () => {
+    try {
+      const cameras = ['camera-1', 'camera-2', 'camera-3', 'camera-4', 'camera-5', 'camera-6'];
+      const timestamp = Date.now(); // Add cache busting
+      const promises = cameras.map(async (camera) => {
+        try {
+          const response = await fetch(`http://10.0.0.79:8000/api/latest_clip/${camera}?t=${timestamp}`);
+          const data = await response.json();
+          return { camera, data: { ...data, loading: false } };
+        } catch (error) {
+          console.error(`Error fetching ${camera} data:`, error);
+          return { 
+            camera, 
+            data: { 
+              has_clip: false, 
+              last_seen_minutes: null, 
+              thumbnail_url: null, 
+              loading: false,
+              error: error.message 
+            } 
+          };
+        }
+      });
+
+      const results = await Promise.all(promises);
+      const newCameraData = {};
+      results.forEach(({ camera, data }) => {
+        newCameraData[camera] = data;
+      });
+      
+      setCameraData(newCameraData);
+    } catch (error) {
+      console.error('Error fetching camera data:', error);
+    }
+  };
+
+  // Helper function to format camera data for display
+  const formatCameraForDisplay = (cameraId, title, colorTheme, cameraNumber) => {
+    const data = cameraData[cameraId];
+    
+    if (data.loading) {
+      return {
+        name: title,
+        location: cameraId.includes('1') || cameraId.includes('3') || cameraId.includes('5') ? 'Interior' : 'Exterior',
+        status: 'loading',
+        thumbnailUrl: null,
+        lastSeen: 'Loading...',
+        hasClip: false,
+        error: null
+      };
+    }
+    if (data.error) {
+      return {
+        name: title,
+        location: cameraId.includes('1') || cameraId.includes('3') || cameraId.includes('5') ? 'Interior' : 'Exterior',
+        status: 'offline',
+        thumbnailUrl: null,
+        lastSeen: 'Error: ' + data.error,
+        hasClip: false,
+        error: data.error
+      };
+    }
+    if (!data.has_clip) {
+      return {
+        name: title,
+        location: cameraId.includes('1') || cameraId.includes('3') || cameraId.includes('5') ? 'Interior' : 'Exterior', 
+        status: 'offline',
+        thumbnailUrl: data.thumbnail_url,
+        lastSeen: data.message || 'No sightings yet',
+        hasClip: false,
+        error: null
+      };
+    }
+    // Format last seen time robustly
+    let lastSeenText = '';
+    if (typeof data.last_seen_minutes !== 'number' || isNaN(data.last_seen_minutes)) {
+      lastSeenText = 'Unknown';
+    } else if (data.last_seen_minutes === 0) {
+      lastSeenText = 'Just now';
+    } else if (data.last_seen_minutes === 1) {
+      lastSeenText = '1 minute ago';
+    } else if (data.last_seen_minutes < 60) {
+      lastSeenText = `${data.last_seen_minutes} minutes ago`;
+    } else {
+      const hours = Math.floor(data.last_seen_minutes / 60);
+      lastSeenText = hours === 1 ? '1 hour ago' : `${hours} hours ago`;
+    }
+    return {
+      name: title,
+      location: cameraId.includes('1') || cameraId.includes('3') || cameraId.includes('5') ? 'Interior' : 'Exterior',
+      status: 'live',
+      thumbnailUrl: data.thumbnail_url,
+      lastSeen: lastSeenText,
+      hasClip: true,
+      triggerType: data.trigger_type,
+      timestamp: data.timestamp,
+      error: null
+    };
+  };
 
   // Use real sightings data - separate hooks for each camera
   const { sightings: critterCamSightings, loading: critterCamLoading, error: critterCamError } = useSightings(3, 'CritterCam');
   const { sightings: nestCamSightings, loading: nestCamLoading, error: nestCamError } = useSightings(3, 'NestCam');
   const { sightings: allSightings, loading: allSightingsLoading, error: allSightingsError, refetch: refetchSightings } = useSightings(4);
-  const { status: motionStatus, startMotionDetection, stopMotionDetection, triggerTestSighting } = useMotionStatus();
 
   useEffect(() => {
     const timer = setInterval(() => setCurrentTime(new Date()), 1000);
     return () => clearInterval(timer);
+  }, []);
+
+  // Fetch real system data
+  useEffect(() => {
+    const fetchSystemData = async () => {
+      try {
+        const response = await fetch(`http://10.0.0.79:8000/api/system-info?t=${Date.now()}`);
+        const data = await response.json();
+        setRealSystemData(data);
+      } catch (error) {
+        console.error('Failed to fetch system data:', error);
+      }
+    };
+
+    fetchSystemData();
+    const interval = setInterval(fetchSystemData, 30000); // Update every 30 seconds
+    return () => clearInterval(interval);
+  }, []);
+
+  // Fetch camera data on mount and periodically (every 60 seconds)
+  useEffect(() => {
+    fetchCameraData();
+    const interval = setInterval(fetchCameraData, 60000); // 60 seconds
+    return () => clearInterval(interval);
   }, []);
 
   // Helper function to get camera-specific sightings with camera name
@@ -64,13 +200,13 @@ function FigmaStyleDashboard({ systemHealth }) {
       id: 1,
       name: "Hero",
       location: "Backyard Oak Tree",
-      temperature: systemHealth.temperature,
-      humidity: systemHealth.humidity,
-      storage: systemHealth.storage,
+      temperature: realSystemData?.temperature || systemHealth.temperature,
+      humidity: realSystemData?.humidity || systemHealth.humidity,
+      storage: realSystemData?.storage || systemHealth.storage,
       batteryLevel: 87,
       cameras: [
-        { name: "NestCam", location: "Interior", status: "live", thumbnailUrl: "http://10.0.0.79:8000/api/stream/NestCam/thumbnail" },
-        { name: "CritterCam", location: "Exterior", status: "live", thumbnailUrl: "http://10.0.0.79:8000/api/stream/CritterCam/thumbnail" }
+        formatCameraForDisplay('camera-1', 'NestCam', 'green', 1),
+        formatCameraForDisplay('camera-2', 'CritterCam', 'blue', 2)
       ],
       recentSightings: getCombinedSightings(['NestCam', 'CritterCam'])
     },
@@ -78,13 +214,13 @@ function FigmaStyleDashboard({ systemHealth }) {
       id: 2,
       name: "Garden Guardian",
       location: "Front Yard Maple",
-      temperature: 24.3,
-      humidity: 72,
-      storage: 62,
+      temperature: (realSystemData?.temperature || 24.3) + 1.2,
+      humidity: (realSystemData?.humidity || 72) - 7,
+      storage: Math.max(45, (realSystemData?.storage || 62) - 13),
       batteryLevel: 94,
       cameras: [
-        { name: "NestCam", location: "Interior", status: "live", thumbnailUrl: "http://10.0.0.79:8000/api/stream/NestCam/thumbnail" },
-        { name: "CritterCam", location: "Exterior", status: "live", thumbnailUrl: "http://10.0.0.79:8000/api/stream/CritterCam/thumbnail" }
+        formatCameraForDisplay('camera-3', 'NestCam', 'purple', 3),
+        formatCameraForDisplay('camera-4', 'CritterCam', 'orange', 4)
       ],
       recentSightings: getCombinedSightings(['NestCam', 'CritterCam'])
     },
@@ -92,13 +228,13 @@ function FigmaStyleDashboard({ systemHealth }) {
       id: 3,
       name: "Forest Watcher",
       location: "Pine Grove",
-      temperature: 19.8,
-      humidity: 58,
-      storage: 89,
+      temperature: (realSystemData?.temperature || 19.8) - 2.7,
+      humidity: (realSystemData?.humidity || 58) - 7,
+      storage: Math.min(95, (realSystemData?.storage || 89) + 6),
       batteryLevel: 76,
       cameras: [
-        { name: "NestCam", location: "Interior", status: "offline", thumbnailUrl: "http://10.0.0.79:8000/api/stream/NestCam/thumbnail" },
-        { name: "CritterCam", location: "Exterior", status: "live", thumbnailUrl: "http://10.0.0.79:8000/api/stream/CritterCam/thumbnail" }
+        formatCameraForDisplay('camera-5', 'NestCam', 'red', 5),
+        formatCameraForDisplay('camera-6', 'CritterCam', 'teal', 6)
       ],
       recentSightings: getCombinedSightings(['NestCam', 'CritterCam'])
     }
@@ -121,93 +257,284 @@ function FigmaStyleDashboard({ systemHealth }) {
       {modalOpen && (
         <Modal open={modalOpen} onClose={() => setModalOpen(false)}>
           {modalType === 'header' && modalData && (
-            <div style={{ display: 'flex', flexDirection: 'row', gap: '2rem', minWidth: '400px' }}>
-              {/* Sidebar: Sensor Data */}
-              <div style={{ minWidth: '140px', background: 'rgba(46,204,113,0.05)', borderRadius: '10px', padding: '1rem 0.75rem', display: 'flex', flexDirection: 'column', alignItems: 'flex-start', justifyContent: 'flex-start', boxShadow: '0 2px 8px rgba(76,175,80,0.05)', marginRight: '1rem' }}>
-                {/* Health Indicator */}
-                <div style={{ display: 'flex', alignItems: 'center', marginBottom: '0.7rem' }}>
-                  <span style={{
-                    display: 'inline-block',
-                    width: '12px',
-                    height: '12px',
-                    borderRadius: '50%',
-                    background: (modalData.batteryLevel > 50 && modalData.storage > 30) ? '#76b900' : (modalData.batteryLevel > 20 ? '#f39c12' : '#dc3545'),
-                    marginRight: '0.4rem',
-                    border: '2px solid #223a2c'
-                  }}></span>
-                  <span style={{ fontWeight: 700, color: '#e0e0e0', fontSize: '1rem' }}>{modalData.name}</span>
-                </div>
-                <div style={{ fontSize: '0.85rem', color: '#8fbc8f', marginBottom: '0.5rem' }}>📍 {modalData.location}</div>
-                <div style={{ fontSize: '0.85rem', color: '#f39c12', marginBottom: '0.3rem' }}>🌡️ {Number(modalData.temperature).toFixed(1)}°C</div>
-                <div style={{ fontSize: '0.85rem', color: '#3498db', marginBottom: '0.3rem' }}>💧 {Number(modalData.humidity).toFixed(1)}%</div>
-                <div style={{ fontSize: '0.85rem', color: '#76b900', marginBottom: '0.3rem' }}>🔋 {modalData.batteryLevel}%</div>
-                <div style={{ fontSize: '0.85rem', color: '#e67e22', marginBottom: '0.3rem' }}>💾 {modalData.storage}%</div>
-                {/* Progress Bars */}
-                <div style={{ width: '100%', marginTop: '0.5rem' }}>
-                  <div style={{ fontSize: '0.7rem', color: '#8fbc8f' }}>Battery</div>
-                  <div style={{ background: '#223a2c', borderRadius: '4px', height: '6px', width: '100%' }}>
-                    <div style={{ background: '#76b900', height: '6px', borderRadius: '4px', width: `${modalData.batteryLevel}%` }}></div>
+            <div style={{ width: '100%', maxWidth: '480px' }}>
+              {/* Header with SB name, sensor data, and close button */}
+              <div style={{ 
+                display: 'flex', 
+                justifyContent: 'space-between', 
+                alignItems: 'center',
+                marginBottom: '1.5rem',
+                paddingBottom: '1rem',
+                borderBottom: '2px solid rgba(139, 90, 43, 0.6)'
+              }}>
+                {/* Left: SB Info */}
+                <div style={{ flex: 1 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', marginBottom: '0.5rem' }}>
+                    <span style={{
+                      display: 'inline-block',
+                      width: '14px',
+                      height: '14px',
+                      borderRadius: '50%',
+                      background: (modalData.batteryLevel > 50 && Math.round(modalData.storage) > 30) ? '#76b900' : (modalData.batteryLevel > 20 ? '#f39c12' : '#dc3545'),
+                      marginRight: '0.6rem',
+                      border: '2px solid #223a2c'
+                    }}></span>
+                    <h1 style={{ 
+                      fontWeight: 800, 
+                      color: '#f5e6d3', 
+                      fontSize: '1.6rem',
+                      margin: 0,
+                      textShadow: '0 2px 8px rgba(0,0,0,0.8), 0 0 12px rgba(245,230,211,0.3)'
+                    }}>{modalData.name}</h1>
                   </div>
-                  <div style={{ fontSize: '0.7rem', color: '#8fbc8f', marginTop: '0.3rem' }}>Storage</div>
-                  <div style={{ background: '#223a2c', borderRadius: '4px', height: '6px', width: '100%' }}>
-                    <div style={{ background: '#e67e22', height: '6px', borderRadius: '4px', width: `${modalData.storage}%` }}></div>
+                  <div style={{ 
+                    fontSize: '0.95rem', 
+                    color: '#e0d0b8',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '0.3rem',
+                    textShadow: '0 1px 4px rgba(0,0,0,0.7)'
+                  }}>
+                    <span>📍</span>
+                    {modalData.location}
                   </div>
                 </div>
-              </div>
-              {/* Main Info */}
-              <div style={{ flex: 1, display: 'flex', flexDirection: 'column', justifyContent: 'flex-start' }}>
-                {/* Last Sighting */}
-                <div style={{ marginBottom: '0.7rem', textAlign: 'left' }}>
-                  <span style={{ color: '#8fbc8f', fontSize: '0.95rem' }}>Last Sighting:</span>
-                  <span style={{ color: '#e0e0e0', fontWeight: 700, fontSize: '1.05rem', marginLeft: '0.5rem' }}>{modalData.recentSightings[0]?.species || 'N/A'}</span>
-                  <span style={{ fontSize: '1.2rem', marginLeft: '0.5rem' }}>{modalData.recentSightings[0]?.image || ''}</span>
-                  <span style={{ color: '#8fbc8f', fontSize: '0.9rem', marginLeft: '0.5rem' }}>{modalData.recentSightings[0]?.time || ''}</span>
-                </div>
-                {/* Camera Feed Thumbnails */}
-                <div style={{ display: 'flex', gap: '1.2rem', justifyContent: 'flex-start', alignItems: 'center', marginBottom: '0.7rem' }}>
-                  {modalData.cameras.map((cam, idx) => (
-                    <div key={idx} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', cursor: 'pointer' }}>
-                      <div style={{
-                        width: '48px',
-                        height: '32px',
-                        background: cam.status === 'live' ? 'radial-gradient(circle, rgba(76,175,80,0.15), transparent)' : 'rgba(60,60,60,0.5)',
-                        borderRadius: '6px',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        marginBottom: '0.2rem',
-                        border: `2px solid ${cam.status === 'live' ? '#76b900' : '#888'}`,
-                        overflow: 'hidden'
-                      }}>
-                        {cam.status === 'live' && cam.thumbnailUrl ? (
-                          <img 
-                            src={`${cam.thumbnailUrl}?t=${Date.now()}`}
-                            alt={`${cam.name} thumbnail`}
-                            style={{
-                              width: '100%',
-                              height: '100%',
-                              objectFit: 'cover'
-                            }}
-                            onError={(e) => {
-                              e.target.style.display = 'none';
-                              e.target.nextSibling.style.display = 'block';
-                            }}
-                          />
-                        ) : null}
-                        <span 
-                          style={{ 
-                            fontSize: '1.5rem', 
-                            color: cam.status === 'live' ? '#76b900' : '#888',
-                            display: (cam.status === 'live' && cam.thumbnailUrl) ? 'none' : 'block'
-                          }}
-                        >
-                          📹
-                        </span>
-                      </div>
-                      <span style={{ fontSize: '0.7rem', color: '#e0e0e0' }}>{cam.name}</span>
+
+                {/* Center: Ultra-Compact Sensor Data */}
+                <div style={{ 
+                  display: 'flex', 
+                  gap: '0.3rem',
+                  alignItems: 'center'
+                }}>
+                  <div style={{ textAlign: 'center', padding: '0.25rem', background: 'rgba(243,156,18,0.4)', borderRadius: '4px', minWidth: '36px', boxShadow: '0 2px 6px rgba(0,0,0,0.3)' }}>
+                    <div style={{ fontSize: '0.8rem' }}>🌡️</div>
+                    <div style={{ fontSize: '0.7rem', fontWeight: 700, color: '#f39c12' }}>
+                      {Math.round(Number(modalData.temperature))}°
                     </div>
-                  ))}
+                  </div>
+                  
+                  <div style={{ textAlign: 'center', padding: '0.25rem', background: 'rgba(52,152,219,0.4)', borderRadius: '4px', minWidth: '36px', boxShadow: '0 2px 6px rgba(0,0,0,0.3)' }}>
+                    <div style={{ fontSize: '0.8rem' }}>💧</div>
+                    <div style={{ fontSize: '0.7rem', fontWeight: 700, color: '#3498db' }}>
+                      {Math.round(Number(modalData.humidity))}%
+                    </div>
+                  </div>
+
+                  <div style={{ textAlign: 'center', padding: '0.25rem', background: 'rgba(118,185,0,0.4)', borderRadius: '4px', minWidth: '36px', boxShadow: '0 2px 6px rgba(0,0,0,0.3)' }}>
+                    <div style={{ fontSize: '0.8rem' }}>🔋</div>
+                    <div style={{ fontSize: '0.7rem', fontWeight: 700, color: '#76b900' }}>
+                      {modalData.batteryLevel}%
+                    </div>
+                  </div>
+
+                  <div style={{ textAlign: 'center', padding: '0.25rem', background: 'rgba(230,126,34,0.4)', borderRadius: '4px', minWidth: '36px', boxShadow: '0 2px 6px rgba(0,0,0,0.3)' }}>
+                    <div style={{ fontSize: '0.8rem' }}>💾</div>
+                    <div style={{ fontSize: '0.7rem', fontWeight: 700, color: '#e67e22' }}>
+                      {Math.round(modalData.storage)}%
+                    </div>
+                  </div>
                 </div>
+
+                {/* Right: Close Button */}
+                <button
+                  onClick={() => setModalOpen(false)}
+                  style={{
+                    background: 'rgba(139, 90, 43, 0.5)',
+                    color: '#f5e6d3',
+                    border: '2px solid rgba(139, 90, 43, 0.7)',
+                    borderRadius: '6px',
+                    padding: '0.4rem 0.8rem',
+                    cursor: 'pointer',
+                    fontWeight: '700',
+                    fontSize: '1rem',
+                    marginLeft: '1rem',
+                    boxShadow: '0 3px 8px rgba(0,0,0,0.3)',
+                    transition: 'all 0.2s ease'
+                  }}
+                  onMouseEnter={(e) => {
+                    e.target.style.background = 'rgba(139, 90, 43, 0.7)';
+                    e.target.style.color = '#ffffff';
+                    e.target.style.transform = 'scale(1.05)';
+                  }}
+                  onMouseLeave={(e) => {
+                    e.target.style.background = 'rgba(139, 90, 43, 0.5)';
+                    e.target.style.color = '#f5e6d3';
+                    e.target.style.transform = 'scale(1)';
+                  }}
+                >
+                  ✕
+                </button>
+              </div>              {/* Camera Feeds - Side by side layout */}
+              <div style={{ 
+                display: 'flex', 
+                gap: '0.8rem',
+                marginBottom: '1.5rem'
+              }}>
+                {modalData.cameras.map((cam, idx) => (
+                  <div key={idx} style={{ 
+                    borderRadius: '10px', 
+                    border: `2px solid ${cam.status === 'live' ? '#76b900' : '#666'}`,
+                    cursor: 'pointer',
+                    transition: 'all 0.3s ease',
+                    flex: '1',
+                    minWidth: '180px',
+                    overflow: 'hidden'
+                  }}>
+                    {/* Full-size Camera thumbnail with overlays */}
+                    <div style={{
+                      width: '100%',
+                      height: '150px',
+                      background: cam.status === 'live' ? 'radial-gradient(circle, rgba(76,175,80,0.15), transparent)' : 'rgba(60,60,60,0.5)',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      overflow: 'hidden',
+                      position: 'relative'
+                    }}>
+                      {cam.status === 'live' && cam.thumbnailUrl ? (
+                        <img 
+                          src={`${cam.thumbnailUrl}?t=${Date.now()}`}
+                          alt={`${cam.name} thumbnail`}
+                          style={{
+                            width: '100%',
+                            height: '100%',
+                            objectFit: 'cover'
+                          }}
+                          onError={(e) => {
+                            e.target.style.display = 'none';
+                            e.target.nextSibling.style.display = 'block';
+                          }}
+                        />
+                      ) : null}
+                      <span 
+                        style={{ 
+                          fontSize: '3rem', 
+                          color: cam.status === 'live' ? '#76b900' : '#888',
+                          display: (cam.status === 'live' && cam.thumbnailUrl) ? 'none' : 'block'
+                        }}
+                      >
+                        📹
+                      </span>
+                      
+                      {/* Camera name overlay - bottom left */}
+                      <div style={{
+                        position: 'absolute',
+                        bottom: '6px',
+                        left: '6px',
+                        background: 'rgba(0,0,0,0.7)',
+                        color: 'white',
+                        fontSize: '0.8rem',
+                        padding: '4px 8px',
+                        borderRadius: '4px',
+                        fontWeight: 'bold',
+                        backdropFilter: 'blur(2px)'
+                      }}>{cam.name}</div>
+                      
+                      {/* Camera Status Indicator */}
+                      <div style={{
+                        position: 'absolute',
+                        top: '6px',
+                        right: '6px',
+                        background: cam.status === 'recent-activity' ? '#dc3545' : '#6c757d',
+                        color: 'white',
+                        fontSize: '0.6rem',
+                        padding: '3px 6px',
+                        borderRadius: '3px',
+                        fontWeight: 'bold',
+                        boxShadow: '0 1px 3px rgba(0,0,0,0.3)',
+                        textTransform: 'uppercase'
+                      }}>
+                        {cam.status === 'recent-activity' ? 'LIVE' : (cam.lastSeen || 'OFFLINE')}
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              {/* Recent Activity - Compact horizontal list */}
+              <div style={{ 
+                borderRadius: '10px', 
+                padding: '0.8rem'
+              }}>
+                <h3 style={{ 
+                  color: '#87d96e', 
+                  fontSize: '1.1rem', 
+                  marginBottom: '0.8rem',
+                  textAlign: 'center',
+                  fontWeight: 800,
+                  textShadow: '0 2px 8px rgba(0,0,0,0.8), 0 0 12px rgba(135,217,110,0.3)'
+                }}>Recent Activity</h3>
+                
+                {modalData.recentSightings && modalData.recentSightings.length > 0 ? (
+                  <div style={{ display: 'flex', gap: '0.8rem', justifyContent: 'center', flexWrap: 'wrap' }}>
+                    {modalData.recentSightings.slice(0, 4).map((sighting, idx) => (
+                      <div key={idx} style={{ 
+                        textAlign: 'center',
+                        padding: '0.6rem',
+                        background: 'rgba(118,185,0,0.5)',
+                        borderRadius: '6px',
+                        border: '1px solid rgba(76,175,80,0.6)',
+                        minWidth: '80px',
+                        boxShadow: '0 3px 8px rgba(0,0,0,0.3)'
+                      }}>
+                        {/* Thumbnail image or fallback emoji */}
+                        {sighting.thumbnail_url ? (
+                          <div style={{
+                            width: '60px',
+                            height: '45px',
+                            borderRadius: '4px',
+                            overflow: 'hidden',
+                            border: '1px solid rgba(76, 175, 80, 0.3)',
+                            margin: '0 auto 0.2rem auto'
+                          }}>
+                            <img 
+                              src={sighting.thumbnail_url}
+                              alt={`${sighting.species} sighting`}
+                              style={{
+                                width: '100%',
+                                height: '100%',
+                                objectFit: 'cover'
+                              }}
+                              onError={(e) => {
+                                // Fallback to emoji if image fails to load
+                                e.target.style.display = 'none';
+                                e.target.nextSibling.style.display = 'block';
+                              }}
+                            />
+                            <div style={{ 
+                              fontSize: '1.5rem', 
+                              marginBottom: '0.2rem',
+                              display: 'none',
+                              paddingTop: '10px'
+                            }}>{sighting.image}</div>
+                          </div>
+                        ) : (
+                          <div style={{ fontSize: '1.5rem', marginBottom: '0.2rem' }}>{sighting.image}</div>
+                        )}
+                        <div style={{ 
+                          fontSize: '0.8rem', 
+                          fontWeight: 600, 
+                          color: '#e0e0e0',
+                          marginBottom: '0.1rem'
+                        }}>{sighting.species}</div>
+                        <div style={{ 
+                          fontSize: '0.7rem', 
+                          color: '#8fbc8f'
+                        }}>{sighting.time}</div>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div style={{ 
+                    textAlign: 'center',
+                    padding: '0.8rem',
+                    color: '#8fbc8f',
+                    fontSize: '0.9rem'
+                  }}>
+                    <div style={{ fontSize: '1.5rem', marginBottom: '0.3rem' }}>😴</div>
+                    No recent activity
+                  </div>
+                )}
               </div>
             </div>
           )}
@@ -306,7 +633,39 @@ function FigmaStyleDashboard({ systemHealth }) {
                       }}
                       onClick={() => setSelectedSighting(s)}
                     >
-                      <div style={{ fontSize: '2rem' }}>{s.image}</div>
+                      {/* Thumbnail image or fallback emoji */}
+                      {s.thumbnail_url ? (
+                        <div style={{
+                          width: '70px',
+                          height: '52px',
+                          borderRadius: '4px',
+                          overflow: 'hidden',
+                          border: '1px solid rgba(76, 175, 80, 0.3)',
+                          margin: '0 auto 0.5rem auto'
+                        }}>
+                          <img 
+                            src={s.thumbnail_url}
+                            alt={`${s.species} sighting`}
+                            style={{
+                              width: '100%',
+                              height: '100%',
+                              objectFit: 'cover'
+                            }}
+                            onError={(e) => {
+                              // Fallback to emoji if image fails to load
+                              e.target.style.display = 'none';
+                              e.target.nextSibling.style.display = 'block';
+                            }}
+                          />
+                          <div style={{ 
+                            fontSize: '2rem',
+                            display: 'none',
+                            paddingTop: '10px'
+                          }}>{s.image}</div>
+                        </div>
+                      ) : (
+                        <div style={{ fontSize: '2rem' }}>{s.image}</div>
+                      )}
                       <div style={{ color: '#e0e0e0', fontWeight: 700, fontSize: '0.95rem' }}>{s.species}</div>
                       <div style={{ color: '#8fbc8f', fontSize: '0.8rem' }}>{s.time}</div>
                       {s.camera && (
@@ -321,7 +680,44 @@ function FigmaStyleDashboard({ systemHealth }) {
           {modalType === 'sighting' && modalData && (
             <div>
               <h2 style={{ color: '#76b900', marginBottom: '1rem' }}>Sighting: {modalData.species}</h2>
-              <div style={{ fontSize: '3rem', margin: '1rem 0' }}>{modalData.image}</div>
+              
+              {/* Full-size thumbnail or fallback emoji */}
+              {modalData.thumbnail_url ? (
+                <div style={{
+                  width: '100%',
+                  maxWidth: '400px',
+                  height: '300px',
+                  borderRadius: '8px',
+                  overflow: 'hidden',
+                  border: '2px solid rgba(76, 175, 80, 0.3)',
+                  margin: '1rem auto',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center'
+                }}>
+                  <img 
+                    src={modalData.thumbnail_url}
+                    alt={`${modalData.species} sighting`}
+                    style={{
+                      width: '100%',
+                      height: '100%',
+                      objectFit: 'cover'
+                    }}
+                    onError={(e) => {
+                      // Fallback to emoji if image fails to load
+                      e.target.style.display = 'none';
+                      e.target.nextSibling.style.display = 'block';
+                    }}
+                  />
+                  <div style={{ 
+                    fontSize: '3rem', 
+                    display: 'none'
+                  }}>{modalData.image}</div>
+                </div>
+              ) : (
+                <div style={{ fontSize: '3rem', margin: '1rem 0', textAlign: 'center' }}>{modalData.image}</div>
+              )}
+              
               <p><strong>Time:</strong> {modalData.time}</p>
               <p><strong>Species:</strong> {modalData.species}</p>
               {modalData.camera && (
@@ -356,60 +752,7 @@ function FigmaStyleDashboard({ systemHealth }) {
           fontSize: '0.9rem',
           color: '#8fbc8f'
         }}>
-          {squirrelBoxes.length} devices active
-        </div>
-        
-        {/* Motion Detection Status */}
-        <div style={{
-          display: 'flex',
-          alignItems: 'center',
-          gap: '0.5rem',
-          fontSize: '0.85rem',
-          marginTop: '0.5rem',
-          color: motionStatus.running ? '#4CAF50' : '#FF9800'
-        }}>
-          <span>{motionStatus.running ? '🟢' : '🟡'}</span>
-          <span>
-            Motion Detection: {motionStatus.running ? 'Active' : 'Inactive'}
-            {motionStatus.recent_sightings_count > 0 && ` (${motionStatus.recent_sightings_count} recent)`}
-          </span>
-          {!motionStatus.running && (
-            <button
-              onClick={startMotionDetection}
-              style={{
-                background: '#4CAF50',
-                color: 'white',
-                border: 'none',
-                padding: '2px 8px',
-                borderRadius: '4px',
-                fontSize: '0.75rem',
-                cursor: 'pointer',
-                marginLeft: '0.5rem'
-              }}
-            >
-              Start
-            </button>
-          )}
-          <button
-            onClick={async () => {
-              const result = await triggerTestSighting();
-              if (result) {
-                setTimeout(() => refetchSightings(), 500); // Refresh sightings after delay
-              }
-            }}
-            style={{
-              background: '#2196F3',
-              color: 'white',
-              border: 'none',
-              padding: '2px 8px',
-              borderRadius: '4px',
-              fontSize: '0.75rem',
-              cursor: 'pointer',
-              marginLeft: '0.5rem'
-            }}
-          >
-            Test Sighting
-          </button>
+          {squirrelBoxes.length} devices active • {allSightings.length} recent sightings
         </div>
       </div>
 
@@ -542,29 +885,28 @@ function FigmaStyleDashboard({ systemHealth }) {
                       }
                     }}
                   >
-                    {camera.status === 'live' && (
-                      <div style={{
-                        position: 'absolute',
-                        top: '6px',
-                        right: '6px',
-                        background: '#dc3545',
-                        color: 'white',
-                        fontSize: '0.7rem',
-                        padding: '2px 6px',
-                        borderRadius: '4px',
-                        fontWeight: 'bold',
-                        zIndex: 10,
-                        boxShadow: '0 2px 4px rgba(0,0,0,0.3)'
-                      }}>
-                        LIVE
-                      </div>
-                    )}
+                    {/* Camera Status Indicator */}
+                    <div style={{
+                      position: 'absolute',
+                      top: '6px',
+                      right: '6px',
+                      background: camera.status === 'live' ? '#dc3545' : '#6c757d',
+                      color: 'white',
+                      fontSize: '0.7rem',
+                      padding: '2px 6px',
+                      borderRadius: '4px',
+                      fontWeight: 'bold',
+                      zIndex: 10,
+                      boxShadow: '0 2px 4px rgba(0,0,0,0.3)'
+                    }}>
+                      {camera.status === 'live' ? 'LIVE' : camera.lastSeen}
+                    </div>
                     
                     {/* Camera Feed */}
-                    {camera.status === 'live' && camera.thumbnailUrl ? (
+                    {camera.thumbnailUrl ? (
                       <img 
-                        src={`${camera.thumbnailUrl}?t=${Date.now()}`}
-                        alt={`${camera.name} live feed`}
+                        src={camera.thumbnailUrl}
+                        alt={`${camera.name} ${camera.status === 'live' ? 'live feed' : 'last captured'}`}
                         style={{
                           width: '100%',
                           height: '100%',
@@ -583,13 +925,12 @@ function FigmaStyleDashboard({ systemHealth }) {
                     <div style={{
                       width: '100%',
                       height: '100%',
-                      display: (!camera.thumbnailUrl || camera.status !== 'live') ? 'flex' : 'none',
+                      display: !camera.thumbnailUrl ? 'flex' : 'none',
                       flexDirection: 'column',
                       justifyContent: 'center',
                       alignItems: 'center',
-                      background: camera.status === 'live' 
-                        ? 'radial-gradient(circle, rgba(76, 175, 80, 0.1), transparent)' 
-                        : 'rgba(60, 60, 60, 0.5)'
+                      background: camera.status === 'live' ? 'linear-gradient(135deg, #76b900, #8fbc8f)' : 'linear-gradient(135deg, #6c757d, #adb5bd)',
+                      borderRadius: '6px'
                     }}>
                       <div style={{
                         fontSize: '2.5rem',
@@ -658,7 +999,38 @@ function FigmaStyleDashboard({ systemHealth }) {
                       overflow: 'hidden',
                       minWidth: 0
                     }}>
-                      <span style={{ fontSize: '0.8rem' }}>{sighting.image}</span>
+                      {/* Thumbnail image or fallback emoji */}
+                      {sighting.thumbnail_url ? (
+                        <div style={{
+                          width: '32px',
+                          height: '24px',
+                          borderRadius: '4px',
+                          overflow: 'hidden',
+                          border: '1px solid rgba(76, 175, 80, 0.3)',
+                          flexShrink: 0
+                        }}>
+                          <img 
+                            src={sighting.thumbnail_url}
+                            alt={`${sighting.species} sighting`}
+                            style={{
+                              width: '100%',
+                              height: '100%',
+                              objectFit: 'cover'
+                            }}
+                            onError={(e) => {
+                              // Fallback to emoji if image fails to load
+                              e.target.style.display = 'none';
+                              e.target.nextSibling.style.display = 'inline';
+                            }}
+                          />
+                          <span style={{ 
+                            fontSize: '0.8rem', 
+                            display: 'none'
+                          }}>{sighting.image}</span>
+                        </div>
+                      ) : (
+                        <span style={{ fontSize: '0.8rem' }}>{sighting.image}</span>
+                      )}
                       <div style={{ display: 'flex', flexDirection: 'column', overflow: 'hidden', minWidth: 0, gap: '0.2rem' }}>
                         <span style={{
                           fontSize: '0.75rem',
@@ -730,6 +1102,8 @@ function FigmaStyleDashboard({ systemHealth }) {
     </div>
   );
 }
+
+// Defensive: Modal import at top
 import Modal from './Modal';
 
 export default FigmaStyleDashboard;

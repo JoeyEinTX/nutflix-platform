@@ -11,8 +11,19 @@ from pathlib import Path
 # Add the parent directory to Python path so we can import 'core'
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from flask import Flask, redirect, url_for, render_template, jsonify, send_from_directory, request
+from flask import Flask, redirect, url_for, render_template, jsonify, send_from_directory, request, Response
 from flask_cors import CORS
+import json
+from datetime import datetime, timedelta
+
+# Import clip manager for latest clip functionality
+try:
+    from core.clip_manager import ClipManager
+    CLIP_MANAGER_AVAILABLE = True
+    print("✅ ClipManager imported successfully")
+except ImportError as e:
+    print(f"❌ ClipManager not available: {e}")
+    CLIP_MANAGER_AVAILABLE = False
 
 # Import sighting service
 try:
@@ -128,6 +139,32 @@ def api_sighting_stats():
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
+@app.route('/api/thumbnails/<path:thumbnail_filename>')
+def serve_thumbnail(thumbnail_filename):
+    """Serve motion detection thumbnail images"""
+    try:
+        from flask import send_from_directory
+        import os
+        
+        # Security: only allow access to files in thumbnails directory
+        thumbnails_dir = os.path.abspath('./thumbnails')
+        if not os.path.exists(thumbnails_dir):
+            return jsonify({'error': 'Thumbnails directory not found'}), 404
+            
+        # Validate filename to prevent directory traversal
+        if '..' in thumbnail_filename or '/' in thumbnail_filename or '\\' in thumbnail_filename:
+            return jsonify({'error': 'Invalid filename'}), 400
+            
+        thumbnail_path = os.path.join(thumbnails_dir, thumbnail_filename)
+        if not os.path.exists(thumbnail_path):
+            return jsonify({'error': 'Thumbnail not found'}), 404
+            
+        return send_from_directory(thumbnails_dir, thumbnail_filename, mimetype='image/jpeg')
+        
+    except Exception as e:
+        print(f"❌ Error serving thumbnail {thumbnail_filename}: {e}")
+        return jsonify({'error': 'Failed to serve thumbnail'}), 500
+
 @app.route('/api/motion/start')
 def api_start_motion_detection():
     """Start motion detection system"""
@@ -159,10 +196,20 @@ def api_motion_status():
         return jsonify({'error': 'Sighting service not available'}), 503
         
     try:
-        return jsonify({
+        # Get basic motion detection status
+        status = {
             'running': sighting_service.running,
             'recent_sightings_count': len(sighting_service.recent_sightings)
-        })
+        }
+        
+        # Add smart IR LED status
+        try:
+            from core.infrared.smart_ir_controller import smart_ir_controller
+            status['ir_status'] = smart_ir_controller.get_status()
+        except ImportError:
+            status['ir_status'] = {'ir_available': False, 'message': 'IR controller not available'}
+        
+        return jsonify(status)
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
@@ -207,6 +254,175 @@ def api_trigger_test_sighting():
         
     except Exception as e:
         return jsonify({'error': str(e)}), 500
+
+@app.route('/api/latest_clip/<camera_id>')
+def get_latest_clip(camera_id):
+    """Get latest clip/motion event data for a camera"""
+    try:
+        # Normalize camera ID
+        original_camera_id = camera_id
+        camera_id = camera_id.lower()
+        
+        print(f"🔍 DEBUG: Looking for clips for camera_id='{camera_id}' (original='{original_camera_id}')")
+        
+        # Map frontend camera names to backend names
+        camera_map = {
+            'nestcam': 'NestCam',
+            'crittercam': 'CritterCam',
+            'camera-1': 'NestCam',
+            'camera-2': 'CritterCam', 
+            'camera-3': 'NestCam',
+            'camera-4': 'CritterCam',
+            'camera-5': 'NestCam',
+            'camera-6': 'CritterCam'
+        }
+        backend_camera_name = camera_map.get(camera_id, camera_id.title())
+        print(f"🔍 DEBUG: Mapped to backend_camera_name='{backend_camera_name}'")
+        print(f"🔍 DEBUG: CLIP_MANAGER_AVAILABLE={CLIP_MANAGER_AVAILABLE}, SIGHTING_SERVICE_AVAILABLE={SIGHTING_SERVICE_AVAILABLE}")
+        
+        if not CLIP_MANAGER_AVAILABLE:
+            # Fallback to sighting service if available
+            if SIGHTING_SERVICE_AVAILABLE:
+                print(f"🔍 DEBUG: Using sighting service, looking for camera='{backend_camera_name}'")
+                recent_sightings = sighting_service.get_recent_sightings(limit=1, camera=backend_camera_name)
+                print(f"🔍 DEBUG: Found {len(recent_sightings) if recent_sightings else 0} sightings")
+                if recent_sightings:
+                    sighting = recent_sightings[0]
+                    # Calculate time since last sighting
+                    try:
+                        # Try to parse the raw_timestamp if available, otherwise timestamp
+                        timestamp_str = sighting.get('raw_timestamp', sighting.get('timestamp', ''))
+                        if timestamp_str:
+                            # Handle different timestamp formats
+                            if 'T' in timestamp_str:
+                                sighting_time = datetime.fromisoformat(timestamp_str.replace('Z', '+00:00'))
+                            else:
+                                sighting_time = datetime.strptime(timestamp_str, '%B %d, %Y %I:%M %p')
+                            minutes_ago = int((datetime.now() - sighting_time).total_seconds() / 60)
+                        else:
+                            minutes_ago = 0
+                    except Exception as e:
+                        print(f"Error parsing timestamp {timestamp_str}: {e}")
+                        minutes_ago = 0
+                    
+                    return jsonify({
+                        'camera_id': camera_id,
+                        'has_clip': True,
+                        'last_seen_minutes': minutes_ago,
+                        'thumbnail_url': f'/api/stream/{camera_id}/thumbnail',  # Fallback to live thumbnail
+                        'timestamp': sighting['timestamp'],
+                        'trigger_type': 'motion',
+                        'species': sighting.get('species', 'Unknown'),
+                        'confidence': sighting.get('confidence', 0.0)
+                    })
+            
+            # No clip data available
+            return jsonify({
+                'camera_id': camera_id,
+                'has_clip': False,
+                'last_seen_minutes': None,
+                'thumbnail_url': None,
+                'timestamp': None,
+                'trigger_type': None,
+                'message': 'No sightings yet'
+            })
+        
+        # Use ClipManager to get latest clip
+        clip_manager = ClipManager()
+        
+        backend_camera_id = backend_camera_name
+        
+        # Get recent clips for this camera
+        clips = clip_manager.scan_clips(camera_id=backend_camera_id, days_back=7)
+        
+        if not clips:
+            return jsonify({
+                'camera_id': camera_id,
+                'has_clip': False,
+                'last_seen_minutes': None,
+                'thumbnail_url': None,
+                'timestamp': None,
+                'trigger_type': None,
+                'message': 'No clips yet'
+            })
+        
+        # Get the most recent clip
+        latest_clip = clips[0]  # clips are sorted by timestamp (newest first)
+        
+        # Calculate minutes since the clip
+        minutes_ago = int((datetime.now() - latest_clip.timestamp).total_seconds() / 60)
+        
+        # Try to create a thumbnail from the clip (for now, fallback to placeholder)
+        thumbnail_url = f'/api/clip_thumbnail/{camera_id}'
+        
+        response_data = {
+            'camera_id': camera_id,
+            'has_clip': True,
+            'last_seen_minutes': minutes_ago,
+            'thumbnail_url': thumbnail_url,
+            'timestamp': latest_clip.timestamp.isoformat(),
+            'trigger_type': latest_clip.trigger_type,
+            'filename': latest_clip.filename,
+            'file_size': latest_clip.file_size,
+            'duration': latest_clip.duration
+        }
+        
+        return jsonify(response_data)
+        
+    except Exception as e:
+        print(f"❌ Error getting latest clip for {camera_id}: {e}")
+        return jsonify({
+            'camera_id': camera_id,
+            'has_clip': False,
+            'error': str(e),
+            'message': 'Error retrieving clip data'
+        }), 500
+
+@app.route('/api/clip_thumbnail/<camera_id>')
+def get_clip_thumbnail(camera_id):
+    """Get thumbnail from latest clip for a camera"""
+    try:
+        if not CLIP_MANAGER_AVAILABLE:
+            # Fallback to live thumbnail
+            return redirect(f'/api/stream/{camera_id}/thumbnail')
+        
+        # For now, create a placeholder thumbnail indicating last motion
+        # In the future, this could extract a frame from the actual video clip
+        import cv2
+        import numpy as np
+        from io import BytesIO
+        
+        # Create a placeholder thumbnail
+        frame = np.zeros((120, 160, 3), dtype=np.uint8)
+        
+        if camera_id.lower() == 'nestcam':
+            frame[:] = [30, 60, 40]  # Dark green for NestCam
+            text = "NestCam"
+            icon = "🐦"
+        else:
+            frame[:] = [40, 30, 60]  # Dark purple for CritterCam  
+            text = "CritterCam"
+            icon = "🐿️"
+        
+        # Add camera info
+        cv2.putText(frame, text, (20, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.4, (255, 255, 255), 1)
+        cv2.putText(frame, "Last Motion", (15, 50), cv2.FONT_HERSHEY_SIMPLEX, 0.3, (200, 200, 200), 1)
+        
+        # Add timestamp placeholder
+        cv2.putText(frame, "Click for details", (10, 100), cv2.FONT_HERSHEY_SIMPLEX, 0.25, (180, 180, 180), 1)
+        
+        # Encode as JPEG
+        ret, jpeg = cv2.imencode('.jpg', frame, [cv2.IMWRITE_JPEG_QUALITY, 80])
+        
+        if ret:
+            return Response(jpeg.tobytes(), mimetype='image/jpeg')
+        else:
+            return "Error creating thumbnail", 500
+            
+    except Exception as e:
+        print(f"❌ Error creating clip thumbnail for {camera_id}: {e}")
+        # Fallback to live thumbnail
+        return redirect(f'/api/stream/{camera_id}/thumbnail')
 
 # Serve React static files in production
 @app.route('/app/static/<path:path>')
@@ -284,7 +500,18 @@ if __name__ == '__main__':
     if SIGHTING_SERVICE_AVAILABLE:
         print("🚀 Starting motion detection and sighting service...")
         try:
+            # Initialize and connect camera manager for vision-based motion detection
+            from core.camera.camera_manager import CameraManager
+            camera_manager = CameraManager("nutpod")
+            print("📹 Camera manager initialized")
+            
+            # Connect camera manager to sighting service for motion detection
+            sighting_service.connect_camera_manager(camera_manager)
+            print("🔗 Camera manager connected to sighting service")
+            
+            # Start the motion detection system
             sighting_service.start_detection()
+            print("✅ Motion detection started")
         except Exception as e:
             print(f"❌ Failed to start sighting service: {e}")
     

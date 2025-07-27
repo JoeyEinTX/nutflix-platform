@@ -14,6 +14,16 @@ from core.motion.motion_detector import MotionDetector
 from core.camera.camera_manager import CameraManager
 from core.storage.file_manager import FileManager
 
+# Smart IR LED controller
+try:
+    from core.infrared.smart_ir_controller import smart_ir_controller
+    SMART_IR_AVAILABLE = True
+    print("🔦 Smart IR controller integrated with sighting service")
+except ImportError as e:
+    print(f"⚠️ Smart IR controller not available: {e}")
+    SMART_IR_AVAILABLE = False
+    smart_ir_controller = None
+
 DB_PATH = '/home/p12146/NutFlix/nutflix-platform/nutflix.db'
 
 class SightingService:
@@ -50,6 +60,7 @@ class SightingService:
                 camera TEXT,
                 motion_zone TEXT,
                 clip_path TEXT,
+                thumbnail_path TEXT,
                 created_at DATETIME DEFAULT CURRENT_TIMESTAMP
             )
         ''')
@@ -179,6 +190,23 @@ class SightingService:
     def _on_vision_motion_detected(self, camera_name: str, timestamp: str, detector):
         """Callback when vision-based motion is detected"""
         try:
+            # Get current frame for IR analysis
+            current_frame = None
+            if self.camera_manager:
+                try:
+                    current_frame = self.camera_manager.get_frame(camera_name)
+                except Exception as e:
+                    print(f"⚠️ Could not get current frame for IR analysis: {e}")
+            
+            # Smart IR LED activation for low light conditions
+            if SMART_IR_AVAILABLE and smart_ir_controller:
+                smart_ir_controller.on_motion_detected(camera_name, current_frame)
+            
+            # Capture thumbnail for this motion event
+            thumbnail_path = None
+            if current_frame is not None:
+                thumbnail_path = self._save_motion_thumbnail(camera_name, timestamp, current_frame)
+            
             # Create motion data from vision detection
             last_motion = detector.get_last_motion_time()
             motion_data = {
@@ -187,7 +215,8 @@ class SightingService:
                 'confidence': 0.90,  # High confidence for vision detection
                 'duration': 3.0,     # Assume average duration
                 'zone': 'center',
-                'last_motion_time': last_motion.isoformat() if last_motion else timestamp
+                'last_motion_time': last_motion.isoformat() if last_motion else timestamp,
+                'thumbnail_path': thumbnail_path
             }
             
             # Determine species based on motion characteristics
@@ -226,6 +255,53 @@ class SightingService:
         elif motion_type == 'vision':
             # Could analyze frame data here for better classification
             return "Wildlife"
+            
+    def _save_motion_thumbnail(self, camera_name: str, timestamp: str, frame) -> Optional[str]:
+        """Save a thumbnail image for a motion detection event"""
+        try:
+            import cv2
+            import os
+            from pathlib import Path
+            
+            # Create thumbnails directory if it doesn't exist
+            thumbnails_dir = Path("./thumbnails")
+            thumbnails_dir.mkdir(exist_ok=True)
+            
+            # Generate filename based on camera and timestamp
+            # Convert timestamp to safe filename format
+            safe_timestamp = timestamp.replace(':', '-').replace('T', '_').split('.')[0]
+            filename = f"{camera_name}_{safe_timestamp}.jpg"
+            thumbnail_path = thumbnails_dir / filename
+            
+            # Convert frame to BGR if needed (for OpenCV)
+            if len(frame.shape) == 3 and frame.shape[2] == 3:
+                frame_bgr = cv2.cvtColor(frame, cv2.COLOR_RGB2BGR)
+            else:
+                frame_bgr = frame
+            
+            # Resize to thumbnail size (320x240 for good quality but manageable size)
+            height, width = frame_bgr.shape[:2]
+            thumb_width = 320
+            thumb_height = int(height * (thumb_width / width))
+            thumbnail = cv2.resize(frame_bgr, (thumb_width, thumb_height))
+            
+            # Add timestamp overlay
+            cv2.putText(thumbnail, safe_timestamp, (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 255, 255), 2)
+            cv2.putText(thumbnail, camera_name, (10, thumb_height - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 255, 255), 2)
+            
+            # Save thumbnail
+            success = cv2.imwrite(str(thumbnail_path), thumbnail, [cv2.IMWRITE_JPEG_QUALITY, 85])
+            
+            if success:
+                print(f"📸 Motion thumbnail saved: {thumbnail_path}")
+                return str(thumbnail_path)
+            else:
+                print(f"❌ Failed to save thumbnail: {thumbnail_path}")
+                return None
+                
+        except Exception as e:
+            print(f"❌ Error saving motion thumbnail: {e}")
+            return None
         else:
             return "Unknown Motion"
             
@@ -262,6 +338,9 @@ class SightingService:
         # Motion zone
         motion_zone = motion_data.get('zone', 'center')
         
+        # Get thumbnail path from motion data
+        thumbnail_path = motion_data.get('thumbnail_path', None)
+        
         # For now, no clip path - could be added later
         clip_path = None
         
@@ -270,10 +349,10 @@ class SightingService:
         cur = conn.cursor()
         
         cur.execute('''
-            INSERT INTO clip_metadata (timestamp, species, behavior, confidence, camera, motion_zone, clip_path)
-            VALUES (?, ?, ?, ?, ?, ?, ?)
+            INSERT INTO clip_metadata (timestamp, species, behavior, confidence, camera, motion_zone, clip_path, thumbnail_path)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
         ''', (
-            timestamp, species, behavior, confidence, camera, motion_zone, clip_path
+            timestamp, species, behavior, confidence, camera, motion_zone, clip_path, thumbnail_path
         ))
         
         conn.commit()
@@ -293,6 +372,7 @@ class SightingService:
             'camera': camera,
             'motion_zone': motion_zone,
             'clip_path': clip_path,
+            'thumbnail_path': thumbnail_path,
             'timestamp': ts_fmt,
             'raw_timestamp': timestamp
         }
@@ -312,6 +392,53 @@ class SightingService:
         else:
             return "active"
             
+    def create_sighting_from_recording(self, camera_name: str, recording_metadata: Dict) -> Dict:
+        """Create a sighting record from a completed video recording"""
+        try:
+            # Extract information from recording metadata
+            timestamp = recording_metadata.get('start_time', datetime.now().isoformat())
+            filename = recording_metadata.get('filename', 'unknown.mp4')
+            duration = recording_metadata.get('duration', 10.0)
+            thumbnail_path = recording_metadata.get('thumbnail_path', None)
+            trigger_type = recording_metadata.get('trigger_type', 'motion')
+            
+            # Create motion data for the recording
+            motion_data = {
+                'camera': camera_name,
+                'type': 'vision',  # Camera-based motion detection
+                'confidence': 0.85,  # High confidence for recorded clips
+                'duration': duration,
+                'zone': 'center',
+                'last_motion_time': timestamp,
+                'thumbnail_path': thumbnail_path,
+                'clip_path': filename
+            }
+            
+            # Determine species based on motion characteristics and camera
+            species = self._classify_motion(motion_data)
+            
+            # Record motion event
+            self._record_motion_event(timestamp, motion_data)
+            
+            # Create sighting entry
+            sighting = self._create_sighting(timestamp, species, motion_data)
+            
+            # Add to cache
+            self.recent_sightings.insert(0, sighting)
+            if len(self.recent_sightings) > 100:
+                self.recent_sightings = self.recent_sightings[:100]
+                
+            # Notify callbacks (for real-time updates)
+            self._notify_sighting_callbacks(sighting)
+            
+            print(f"🎬 Recording processed! New sighting: {species} on {camera_name} from clip {filename}")
+            
+            return sighting
+            
+        except Exception as e:
+            print(f"❌ Error creating sighting from recording: {e}")
+            return None
+
     def add_sighting_callback(self, callback):
         """Add callback for real-time sighting updates"""
         self.sighting_callbacks.append(callback)
@@ -332,7 +459,7 @@ class SightingService:
         
         if camera:
             cur.execute('''
-                SELECT timestamp, species, behavior, confidence, camera, motion_zone, clip_path
+                SELECT timestamp, species, behavior, confidence, camera, motion_zone, clip_path, thumbnail_path
                 FROM clip_metadata
                 WHERE camera = ?
                 ORDER BY created_at DESC
@@ -340,7 +467,7 @@ class SightingService:
             ''', (camera, limit))
         else:
             cur.execute('''
-                SELECT timestamp, species, behavior, confidence, camera, motion_zone, clip_path
+                SELECT timestamp, species, behavior, confidence, camera, motion_zone, clip_path, thumbnail_path
                 FROM clip_metadata
                 ORDER BY created_at DESC
                 LIMIT ?
@@ -353,12 +480,13 @@ class SightingService:
         results = []
         for row in rows:
             ts = row['timestamp']
-            try:
-                dt = datetime.fromisoformat(ts)
-                ts_fmt = dt.strftime('%B %d, %Y %I:%M %p')
-            except Exception:
-                ts_fmt = ts
-                
+            ts_fmt = ts
+            if ts:
+                try:
+                    dt = datetime.fromisoformat(ts)
+                    ts_fmt = dt.strftime('%B %d, %Y %I:%M %p')
+                except Exception:
+                    pass  # Leave ts_fmt as original string
             results.append({
                 'species': row['species'],
                 'behavior': row['behavior'],
@@ -366,10 +494,10 @@ class SightingService:
                 'camera': row['camera'],
                 'motion_zone': row['motion_zone'],
                 'clip_path': row['clip_path'],
+                'thumbnail_path': row['thumbnail_path'],
                 'timestamp': ts_fmt,
                 'raw_timestamp': ts
             })
-            
         return results
         
     def get_sighting_stats(self) -> Dict:
