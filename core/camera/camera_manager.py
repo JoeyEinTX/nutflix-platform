@@ -165,6 +165,17 @@ class CameraManager:
         """Check if a camera is available and working"""
         cam = self.cameras.get(camera_name)
         return cam is not None and cam is not False
+    
+    def get_camera(self, camera_name: str):
+        """Get camera instance for recording operations"""
+        if camera_name not in self.cameras:
+            return None
+        
+        camera = self.cameras[camera_name]
+        if camera is None or camera is False:
+            return None
+            
+        return camera
         
     def get_available_cameras(self) -> list:
         """Get list of successfully initialized cameras"""

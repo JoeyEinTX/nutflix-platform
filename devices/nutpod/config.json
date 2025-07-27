@@ -7,5 +7,9 @@
   "streaming_enabled": true,
   "max_recording_duration": 30,
   "cleanup_days": 30,
-  "pre_record_buffer": 1.0
+  "pre_record_buffer": 1.0,
+  "motion_sensors": {
+    "CritterCam": 17,
+    "NestCam": 27
+  }
 }

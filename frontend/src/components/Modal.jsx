@@ -1,6 +1,37 @@
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 
+// Seasonal bark backgrounds
+const getSeasonalBark = () => {
+  // Dev preview mode - check URL for ?bark=season
+  const urlParams = new URLSearchParams(window.location.search);
+  const previewSeason = urlParams.get('bark');
+  if (previewSeason) {
+    const seasonMap = {
+      'spring': 'bark-spring.jpg',
+      'summer': 'bark-summer.jpg', 
+      'fall': 'bark-fall.jpg',
+      'winter': 'bark-winter.jpg'
+    };
+    if (seasonMap[previewSeason]) return seasonMap[previewSeason];
+  }
+  
+  // Normal seasonal logic
+  const month = new Date().getMonth(); // 0-11
+  
+  // Spring: March(2), April(3), May(4)
+  if (month >= 2 && month <= 4) return 'bark-spring.jpg';
+  
+  // Summer: June(5), July(6), August(7)  
+  if (month >= 5 && month <= 7) return 'bark-summer.jpg';
+  
+  // Fall: September(8), October(9), November(10)
+  if (month >= 8 && month <= 10) return 'bark-fall.jpg';
+  
+  // Winter: December(11), January(0), February(1)
+  return 'bark-winter.jpg';
+};
+
 function Modal({ open, onClose, children }) {
   const [showSquirrel, setShowSquirrel] = useState(false);
   const [modalFade, setModalFade] = useState(false);
@@ -45,16 +76,19 @@ function Modal({ open, onClose, children }) {
             exit={{ scale: 0.85, opacity: 0 }}
             transition={{ type: 'spring', stiffness: 320, damping: 28, duration: 0.32 }}
             style={{
-              background: 'linear-gradient(135deg, #1a2332 0%, #223a2c 100%)',
-              borderRadius: '16px',
-              boxShadow: '0 8px 32px rgba(46,204,113,0.15)',
-              border: '1px solid rgba(76,175,80,0.25)',
+              background: `
+                linear-gradient(rgba(25, 15, 10, 0.35), rgba(35, 20, 15, 0.35)),
+                url('/app/images/${getSeasonalBark()}?v=2') center/cover
+              `,
+              borderRadius: '12px',
+              boxShadow: '0 12px 40px rgba(0,0,0,0.6), inset 0 2px 0 rgba(139, 90, 43, 0.3), inset 0 -1px 0 rgba(35, 25, 18, 0.6)',
+              border: '2px solid rgba(139, 90, 43, 0.6)',
               minWidth: '320px',
-              width: '70vw',
-              maxWidth: '900px',
-              maxHeight: '80vh',
-              padding: '2.5rem',
-              color: '#e0e0e0',
+              width: 'auto',
+              maxWidth: '520px',
+              maxHeight: '85vh',
+              padding: '1.5rem',
+              color: '#f5e6d3',
               position: 'relative',
               overflowY: 'auto',
               display: 'flex',
@@ -62,27 +96,9 @@ function Modal({ open, onClose, children }) {
               alignItems: 'center',
               opacity: modalFade ? 0.2 : 1,
               transition: 'opacity 0.4s',
+              textShadow: '0 2px 4px rgba(0,0,0,0.8)'
             }}
           >
-            <button
-              onClick={handleClose}
-              style={{
-                position: 'absolute',
-                top: '1rem',
-                right: '1rem',
-                background: 'rgba(46,204,113,0.15)',
-                color: '#76b900',
-                border: 'none',
-                borderRadius: '6px',
-                padding: '0.5rem 1rem',
-                cursor: 'pointer',
-                fontWeight: '700',
-                fontSize: '1rem',
-                boxShadow: '0 2px 8px rgba(76,175,80,0.08)'
-              }}
-            >
-              × Close
-            </button>
             {children}
             {/* Squirrel animation overlays modal, centered vertically */}
             <AnimatePresence>

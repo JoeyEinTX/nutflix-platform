@@ -166,14 +166,16 @@ function App() {
                   top: '100%',
                   right: '0',
                   marginTop: '0.5rem',
-                  background: 'white',
-                  borderRadius: '8px',
-                  boxShadow: '0 8px 32px rgba(0,0,0,0.2)',
+                  background: 'linear-gradient(135deg, rgba(20, 30, 40, 0.98) 0%, rgba(46, 60, 70, 0.98) 100%)',
+                  backdropFilter: 'blur(12px)',
+                  borderRadius: '12px',
+                  boxShadow: '0 12px 40px rgba(0,0,0,0.4), 0 0 0 1px rgba(76, 175, 80, 0.3)',
                   overflow: 'hidden',
                   zIndex: 1000,
-                  minWidth: '200px'
+                  minWidth: '220px',
+                  border: '1px solid rgba(76, 175, 80, 0.2)'
                 }}>
-                  {navigationItems.map((item) => (
+                  {navigationItems.map((item, index) => (
                     <button
                       key={item.id}
                       onClick={() => {
@@ -182,30 +184,57 @@ function App() {
                       }}
                       style={{
                         width: '100%',
-                        padding: '1rem',
+                        padding: '1rem 1.25rem',
                         border: 'none',
-                        background: activeTab === item.id ? '#f8f9fa' : 'white',
-                        color: '#2c3e50',
+                        background: activeTab === item.id 
+                          ? 'linear-gradient(90deg, rgba(76, 175, 80, 0.2) 0%, rgba(118, 185, 0, 0.15) 100%)' 
+                          : 'transparent',
+                        color: activeTab === item.id ? '#76b900' : '#e0e0e0',
                         cursor: 'pointer',
                         display: 'flex',
                         alignItems: 'center',
-                        gap: '0.75rem',
-                        fontSize: '1rem',
-                        transition: 'background-color 0.2s ease'
+                        gap: '0.875rem',
+                        fontSize: '0.95rem',
+                        fontWeight: activeTab === item.id ? '600' : '500',
+                        transition: 'all 0.2s ease',
+                        borderBottom: index < navigationItems.length - 1 ? '1px solid rgba(255,255,255,0.08)' : 'none',
+                        position: 'relative',
+                        overflow: 'hidden'
                       }}
                       onMouseEnter={(e) => {
                         if (activeTab !== item.id) {
-                          e.target.style.background = '#f8f9fa';
+                          e.target.style.background = 'rgba(76, 175, 80, 0.1)';
+                          e.target.style.color = '#8fbc8f';
+                          e.target.style.transform = 'translateX(4px)';
                         }
                       }}
                       onMouseLeave={(e) => {
                         if (activeTab !== item.id) {
-                          e.target.style.background = 'white';
+                          e.target.style.background = 'transparent';
+                          e.target.style.color = '#e0e0e0';
+                          e.target.style.transform = 'translateX(0px)';
                         }
                       }}
                     >
-                      <span style={{ fontSize: '1.2rem' }}>{item.icon}</span>
-                      <span>{item.label}</span>
+                      <span style={{ 
+                        fontSize: '1.3rem',
+                        filter: activeTab === item.id ? 'drop-shadow(0 0 4px rgba(118, 185, 0, 0.3))' : 'none',
+                        transition: 'filter 0.2s ease'
+                      }}>{item.icon}</span>
+                      <span style={{
+                        textShadow: activeTab === item.id ? '0 0 8px rgba(118, 185, 0, 0.2)' : 'none'
+                      }}>{item.label}</span>
+                      {activeTab === item.id && (
+                        <div style={{
+                          position: 'absolute',
+                          left: '0',
+                          top: '0',
+                          bottom: '0',
+                          width: '3px',
+                          background: 'linear-gradient(180deg, #76b900 0%, #5a7c0a 100%)',
+                          boxShadow: '0 0 8px rgba(118, 185, 0, 0.4)'
+                        }}></div>
+                      )}
                     </button>
                   ))}
                 </div>

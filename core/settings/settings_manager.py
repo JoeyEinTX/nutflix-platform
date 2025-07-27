@@ -69,6 +69,25 @@ class CameraSettings:
 
 
 @dataclass
+class ClipRecordingSettings:
+    """Video clip recording settings."""
+    enabled: bool = True
+    duration_seconds: float = 10.0
+    storage_path: str = "./clips"
+    max_clips: int = 100
+    max_age_days: int = 30
+    enable_ir_at_night: bool = True
+    ir_gpio_pin: int = 23
+    record_on_motion: Dict[str, bool] = field(default_factory=lambda: {
+        'nestcam': True,
+        'crittercam': True
+    })
+    organize_by_camera: bool = True
+    organize_by_date: bool = True
+    cooldown_seconds: float = 5.0
+
+
+@dataclass
 class RecordingSettings:
     """Recording configuration settings."""
     quality: str = "high"
