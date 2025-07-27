@@ -1,5 +1,2 @@
 # GUI Submodule Configuration
 # This will be automatically managed by git submodule commands
-[submodule "frontend-gui"]
-	path = frontend-gui
-	url = https://github.com/JoeyEinTX/codespaces-react
