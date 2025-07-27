@@ -1,4 +1,4 @@
-from flask import Blueprint, Response, jsonify
+from flask import Blueprint, Response, jsonify, request
 import cv2
 import time
 import numpy as np
@@ -136,20 +136,46 @@ def stream_status():
 
 @stream_bp.route('/api/stream/start', methods=['POST'])
 def start_stream():
-    """Start streaming (mock for now)"""
-    return jsonify({
-        'status': 'started',
-        'message': 'Streams activated',
-        'cameras': ['CritterCam', 'NestCam']
-    })
+    """Start streaming for specific camera on-demand"""
+    data = request.get_json()
+    camera_name = data.get('camera') if data else None
+    
+    if camera_name:
+        return jsonify({
+            'status': 'started',
+            'message': f'Live stream activated for {camera_name}',
+            'camera': camera_name,
+            'stream_url': f'/api/stream/{camera_name}/live'
+        })
+    else:
+        return jsonify({
+            'status': 'started',
+            'message': 'All streams activated',
+            'cameras': ['CritterCam', 'NestCam']
+        })
 
 @stream_bp.route('/api/stream/stop', methods=['POST']) 
 def stop_stream():
-    """Stop streaming (mock for now)"""
-    return jsonify({
-        'status': 'stopped',
-        'message': 'Streams deactivated'
-    })
+    """Stop streaming for specific camera"""
+    data = request.get_json()
+    camera_name = data.get('camera') if data else None
+    
+    if camera_name:
+        return jsonify({
+            'status': 'stopped',
+            'message': f'Live stream deactivated for {camera_name}',
+            'camera': camera_name
+        })
+    else:
+        return jsonify({
+            'status': 'stopped',
+            'message': 'All streams deactivated'
+        })
+
+@stream_bp.route('/api/stream/<camera_name>/live')
+def get_live_stream(camera_name):
+    """Get live MJPEG stream for specific camera"""
+    return Response(gen_frames(camera_name), mimetype='multipart/x-mixed-replace; boundary=frame')
 
 @stream_bp.route('/api/stream/<camera_name>/snapshot')
 def get_camera_snapshot(camera_name):

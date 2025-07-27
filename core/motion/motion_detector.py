@@ -127,6 +127,7 @@ class VisionMotionDetector:
                     self.last_motion_time = now
                     self.last_detection_time = now
                     self.last_detection = True
+                    print(f"[VisionMotionDetector] ✅ Motion detected! Motion ratio: {motion_ratio:.3f} (threshold: {self.motion_sensitivity})")
             else:
                 self.last_detection = False
         self.last_frame = gray

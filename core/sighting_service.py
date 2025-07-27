@@ -190,6 +190,8 @@ class SightingService:
     def _on_vision_motion_detected(self, camera_name: str, timestamp: str, detector):
         """Callback when vision-based motion is detected"""
         try:
+            print(f"[SightingService] 📡 Vision motion event received for {camera_name}")
+            
             # Get current frame for IR analysis
             current_frame = None
             if self.camera_manager:
@@ -445,6 +447,7 @@ class SightingService:
         
     def _notify_sighting_callbacks(self, sighting: Dict):
         """Notify all registered callbacks of new sighting"""
+        print(f"[SightingService] 🚀 Notifying {len(self.sighting_callbacks)} callbacks for {sighting.get('camera', 'unknown')} sighting")
         for callback in self.sighting_callbacks:
             try:
                 callback(sighting)

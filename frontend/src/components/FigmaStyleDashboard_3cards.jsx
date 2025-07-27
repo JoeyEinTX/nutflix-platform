@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useSightings } from '../hooks/useSightings';
+import OnDemandCameraView from './OnDemandCameraView';
 
 function FigmaStyleDashboard({ systemHealth }) {
   // Camera modal state
@@ -9,6 +10,9 @@ function FigmaStyleDashboard({ systemHealth }) {
   const [modalOpen, setModalOpen] = useState(false);
   const [modalType, setModalType] = useState(null); // 'header' | 'camera' | 'sighting'
   const [modalData, setModalData] = useState(null);
+  // On-demand camera view state
+  const [showLiveCameraView, setShowLiveCameraView] = useState(false);
+  const [liveCameraData, setLiveCameraData] = useState(null);
   // Real system data
   const [realSystemData, setRealSystemData] = useState(null);
   
@@ -244,6 +248,15 @@ function FigmaStyleDashboard({ systemHealth }) {
     setModalType('header');
     setModalData(squirrelBoxes.find(box => box.id === boxId));
     setModalOpen(true);
+  };
+
+  const handleCameraLiveView = (camera, boxName) => {
+    setLiveCameraData({
+      ...camera,
+      boxName: boxName,
+      apiName: camera.name // Ensure we have the correct API name
+    });
+    setShowLiveCameraView(true);
   };
 
   return (
@@ -868,9 +881,7 @@ function FigmaStyleDashboard({ systemHealth }) {
                       transition: 'all 0.2s ease'
                     }}
                     onClick={() => {
-                      setModalType('camera');
-                      setModalData({ ...camera, name: box.name, location: camera.location });
-                      setModalOpen(true);
+                      handleCameraLiveView(camera, box.name);
                     }}
                     onMouseEnter={(e) => {
                       if (camera.status === 'live') {
@@ -1099,6 +1110,17 @@ function FigmaStyleDashboard({ systemHealth }) {
           Last Updated: {currentTime.toLocaleTimeString()}
         </div>
       </div>
+
+      {/* On-Demand Live Camera View */}
+      {showLiveCameraView && liveCameraData && (
+        <OnDemandCameraView 
+          camera={liveCameraData}
+          onClose={() => {
+            setShowLiveCameraView(false);
+            setLiveCameraData(null);
+          }}
+        />
+      )}
     </div>
   );
 }

@@ -7,10 +7,10 @@ import threading
 from typing import Dict
 from core.config.config_manager import get_config
 from core.camera.camera_manager import CameraManager
-from core.recording_engine import RecordingEngine  # Use the main recording engine
-from core.stream.stream_server import StreamServer
+from core.recording_engine import RecordingEngine  
 from core.audio.audio_recorder import AudioRecorder
-from core.sighting_service import SightingService  # For camera-based motion detection
+from core.sighting_service import SightingService  
+from core.motion.dual_pir_motion_detector import DualPIRMotionDetector  # New PIR motion detection
 
 def main():
     logging.basicConfig(
@@ -38,35 +38,30 @@ def main():
     except Exception as e:
         logging.warning(f"[Audio] AudioRecorder unavailable: {e}")
     
-    stream_server = StreamServer("nutpod")
-    stream_thread = threading.Thread(target=stream_server.run, kwargs={"host": "0.0.0.0", "port": 5000, "threaded": True}, daemon=True)
-    stream_thread.start()
-    print("[NutPod] Stream server started on port 5000.")
+    # NOTE: StreamServer removed - using dashboard's integrated streaming instead
+    # This eliminates camera hardware conflicts and reduces resource usage
+    print("[NutPod] Using dashboard's on-demand streaming (port 8000)")
 
-    # Initialize sighting service for camera-based motion detection
-    sighting_service = SightingService(cam_mgr)
-    sighting_service.start()
-    logging.info("[Motion] Camera-based motion detection started via SightingService")
-
-    # Motion callback to trigger video recording
-    def handle_motion(sighting):
-        """Handle motion detection from sighting service"""
+    # Initialize PIR motion detection (replaces camera-based motion detection)
+    def handle_pir_motion(camera_name, motion_event):
+        """Handle motion detection from PIR sensors"""
         nonlocal last_mic_record_time
         
-        camera_name = sighting.get('camera', 'Unknown')
-        timestamp = sighting.get('timestamp', 'Unknown')
+        timestamp = motion_event.get('timestamp', 'Unknown')
+        gpio_pin = motion_event.get('gpio_pin', 'Unknown')
         
-        logging.info(f"[Motion] Motion detected on {camera_name} at {timestamp}")
+        print(f"[NutPod PIRHandler] 🚨 PIR motion detected for {camera_name} (GPIO {gpio_pin})")
+        logging.info(f"[PIR Motion] Motion detected on {camera_name} at {timestamp}")
         
         # Start video recording
         try:
-            success = recording_engine.start_recording(camera_name, duration=10.0, trigger_type="motion")
+            success = recording_engine.start_recording(camera_name, duration=10.0, trigger_type="pir_motion")
             if success:
-                logging.info(f"[Motion] Started recording for {camera_name}")
+                logging.info(f"[PIR Motion] Started recording for {camera_name}")
             else:
-                logging.warning(f"[Motion] Failed to start recording for {camera_name}")
+                logging.warning(f"[PIR Motion] Failed to start recording for {camera_name}")
         except Exception as e:
-            logging.error(f"[Motion] Recording error: {e}")
+            logging.error(f"[PIR Motion] Recording error: {e}")
 
         # Motion-triggered audio for NestCam
         if camera_name == "NestCam" and ENABLE_MIC_RECORDING:
@@ -92,6 +87,15 @@ def main():
                 logging.warning(f"[Audio] AudioRecorder not available; skipping mic recording for {camera_name}")
         elif camera_name == "NestCam" and not ENABLE_MIC_RECORDING:
             logging.info(f"[Audio] Mic recording disabled by privacy flag; skipping for {camera_name}")
+
+    # Initialize dual PIR motion detector
+    pir_detector = DualPIRMotionDetector(motion_callback=handle_pir_motion)
+    pir_detector.start_detection()
+    logging.info("[PIR Motion] Dual PIR motion detection started for CritterCam (GPIO 18) and NestCam (GPIO 24)")
+
+    # Keep sighting service for creating sightings from recordings, but disable camera motion detection
+    sighting_service = SightingService(cam_mgr)
+    # NOTE: Not starting sighting_service.start() to avoid camera conflicts
     
     # Recording completion callback to create sightings from recorded clips
     def handle_recording_complete(camera_name: str, recording_metadata: Dict):
@@ -157,20 +161,20 @@ def main():
     monitor_thread.start()
     logging.info("[Monitor] Recording monitor started")
 
-    # Register motion callback with sighting service
-    sighting_service.add_sighting_callback(handle_motion)
-
+    # PIR motion detection is now handling motion events directly
+    # No need to register camera-based motion callbacks
+    
     try:
         while True:
             time.sleep(1)
     except KeyboardInterrupt:
         print("[NutPod] Exiting cleanly.")
-        sighting_service.stop()
+        pir_detector.stop_detection()  # Stop PIR detection
         # Stop any active recordings
         active_recordings = recording_engine.get_active_recordings()
         for camera_id in active_recordings:
             recording_engine.stop_recording(camera_id)
-        print("[NutPod] Stream server thread will exit with main process.")
+        print("[NutPod] PIR motion detection stopped.")
 
 if __name__ == "__main__":
     main()
