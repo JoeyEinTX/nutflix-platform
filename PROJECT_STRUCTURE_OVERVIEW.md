@@ -21,8 +21,6 @@ nutflix-platform/
 │
 ├── 🔧 Scripts & Tools
 │   ├── debug_setup.sh                   # Pi debugging setup script
-│   ├── debug_test.py                    # System debug test
-│   ├── demo_settings.py                 # Settings system demonstration
 │   ├── manage_gui.sh                    # GUI submodule management
 │   ├── quick_start.py                   # Quick development startup
 │   ├── setup_react_integration.sh      # React integration automation

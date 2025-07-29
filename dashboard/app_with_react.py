@@ -51,14 +51,10 @@ pir_detector = None
 # PIR motion callback to connect with sighting service
 def pir_motion_callback(camera_name: str, motion_event: dict):
     """Handle PIR motion detection events"""
-    print(f"🔥 CALLBACK TRIGGERED! camera_name={camera_name}")
-    print(f"🔥 CALLBACK motion_event={motion_event}")
-    
     try:
-        print(f"🚨 PIR Motion detected: {camera_name} - {motion_event}")
+        print(f"🚨 PIR Motion detected: {camera_name}")
         
         if SIGHTING_SERVICE_AVAILABLE:
-            print(f"🔥 SIGHTING SERVICE AVAILABLE - proceeding")
             # Create motion data compatible with sighting service
             motion_data = {
                 'camera': camera_name,
@@ -70,18 +66,17 @@ def pir_motion_callback(camera_name: str, motion_event: dict):
                 'trigger_type': motion_event.get('trigger_type', 'pir_motion')
             }
             
-            print(f"🔥 CALLING _record_motion_event with motion_data={motion_data}")
             # Record the motion event
             timestamp = motion_event.get('timestamp')
             sighting_service._record_motion_event(timestamp, motion_data)
             print(f"✅ Motion event recorded to database: {camera_name}")
         else:
-            print(f"❌ SIGHTING SERVICE NOT AVAILABLE!")
+            print(f"❌ Sighting service not available!")
             
     except Exception as e:
         print(f"❌ Error handling PIR motion: {e}")
         import traceback
-        print(f"🔥 FULL TRACEBACK: {traceback.format_exc()}")
+        print(f"Full traceback: {traceback.format_exc()}")
 
 # Configure CORS for React frontend
 CORS(app, origins=[
@@ -311,8 +306,6 @@ def get_latest_clip(camera_id):
         original_camera_id = camera_id
         camera_id = camera_id.lower()
         
-        print(f"🔍 DEBUG: Looking for clips for camera_id='{camera_id}' (original='{original_camera_id}')")
-        
         # Map frontend camera names to backend names
         camera_map = {
             'nestcam': 'NestCam',
@@ -325,15 +318,11 @@ def get_latest_clip(camera_id):
             'camera-6': 'CritterCam'
         }
         backend_camera_name = camera_map.get(camera_id, camera_id.title())
-        print(f"🔍 DEBUG: Mapped to backend_camera_name='{backend_camera_name}'")
-        print(f"🔍 DEBUG: CLIP_MANAGER_AVAILABLE={CLIP_MANAGER_AVAILABLE}, SIGHTING_SERVICE_AVAILABLE={SIGHTING_SERVICE_AVAILABLE}")
         
         if not CLIP_MANAGER_AVAILABLE:
             # Fallback to sighting service if available
             if SIGHTING_SERVICE_AVAILABLE:
-                print(f"🔍 DEBUG: Using sighting service, looking for camera='{backend_camera_name}'")
                 recent_sightings = sighting_service.get_recent_sightings(limit=1, camera=backend_camera_name)
-                print(f"🔍 DEBUG: Found {len(recent_sightings) if recent_sightings else 0} sightings")
                 if recent_sightings:
                     sighting = recent_sightings[0]
                     # Calculate time since last sighting
@@ -430,45 +419,16 @@ def get_latest_clip(camera_id):
 def get_clip_thumbnail(camera_id):
     """Get thumbnail from latest clip for a camera"""
     try:
-        if not CLIP_MANAGER_AVAILABLE:
-            # Fallback to live thumbnail
-            return redirect(f'/api/stream/{camera_id}/thumbnail')
+        print(f"🔍 Thumbnail request for camera_id: {camera_id}")
         
-        # For now, create a placeholder thumbnail indicating last motion
-        # In the future, this could extract a frame from the actual video clip
-        import cv2
-        import numpy as np
-        from io import BytesIO
-        
-        # Create a placeholder thumbnail
-        frame = np.zeros((120, 160, 3), dtype=np.uint8)
-        
-        if camera_id.lower() == 'nestcam':
-            frame[:] = [30, 60, 40]  # Dark green for NestCam
-            text = "NestCam"
-            icon = "🐦"
-        else:
-            frame[:] = [40, 30, 60]  # Dark purple for CritterCam  
-            text = "CritterCam"
-            icon = "🐿️"
-        
-        # Add camera info
-        cv2.putText(frame, text, (20, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.4, (255, 255, 255), 1)
-        cv2.putText(frame, "Last Motion", (15, 50), cv2.FONT_HERSHEY_SIMPLEX, 0.3, (200, 200, 200), 1)
-        
-        # Add timestamp placeholder
-        cv2.putText(frame, "Click for details", (10, 100), cv2.FONT_HERSHEY_SIMPLEX, 0.25, (180, 180, 180), 1)
-        
-        # Encode as JPEG
-        ret, jpeg = cv2.imencode('.jpg', frame, [cv2.IMWRITE_JPEG_QUALITY, 80])
-        
-        if ret:
-            return Response(jpeg.tobytes(), mimetype='image/jpeg')
-        else:
-            return "Error creating thumbnail", 500
+        # Always redirect to live camera thumbnail since we don't have video clips yet
+        # This will show the actual camera feed thumbnail instead of placeholder
+        live_thumbnail_url = f'/api/stream/{camera_id}/thumbnail'
+        print(f"🔄 Redirecting to live thumbnail: {live_thumbnail_url}")
+        return redirect(live_thumbnail_url)
             
     except Exception as e:
-        print(f"❌ Error creating clip thumbnail for {camera_id}: {e}")
+        print(f"❌ Error getting clip thumbnail for {camera_id}: {e}")
         # Fallback to live thumbnail
         return redirect(f'/api/stream/{camera_id}/thumbnail')
 
@@ -530,6 +490,16 @@ if __name__ == '__main__':
             camera_manager = CameraManager("nutpod")
             print("📹 Camera manager initialized")
             
+            # Share camera manager with stream routes first
+            try:
+                from routes import stream
+                # Pass the camera manager to the stream module
+                stream.cam_mgr = camera_manager
+                stream.CAMERA_AVAILABLE = True
+                print("📹 Camera manager shared with stream routes")
+            except Exception as e:
+                print(f"❌ Could not share camera manager with stream routes: {e}")
+            
             # Connect camera manager to sighting service for motion detection
             sighting_service.connect_camera_manager(camera_manager)
             print("🔗 Camera manager connected to sighting service")
@@ -543,19 +513,12 @@ if __name__ == '__main__':
     # Initialize PIR motion detection
     if PIR_DETECTOR_AVAILABLE and SIGHTING_SERVICE_AVAILABLE:
         print("🚨 Initializing PIR motion detection...")
-        print(f"🔥 PIR_DETECTOR_AVAILABLE={PIR_DETECTOR_AVAILABLE}")
-        print(f"🔥 SIGHTING_SERVICE_AVAILABLE={SIGHTING_SERVICE_AVAILABLE}")
         try:
-            print("🔥 Creating DualPIRMotionDetector instance...")
             pir_detector = DualPIRMotionDetector(motion_callback=pir_motion_callback)
-            print("🔥 PIR detector created, calling start_detection()...")
             pir_detector.start_detection()
             print("✅ PIR motion detector started for both cameras")
-            print("🔥 PIR detector threads should now be monitoring GPIO 18 and 24")
         except Exception as e:
             print(f"❌ Failed to start PIR motion detector: {e}")
-            import traceback
-            print(f"🔥 PIR STARTUP TRACEBACK: {traceback.format_exc()}")
     else:
         print(f"❌ PIR motion detection NOT started:")
         print(f"   PIR_DETECTOR_AVAILABLE={PIR_DETECTOR_AVAILABLE}")

@@ -63,12 +63,29 @@ function FigmaStyleDashboard({ systemHealth }) {
     }
   };
 
+  // Helper function to map frontend camera IDs to backend camera names
+  const getCameraStreamName = (cameraId, cameraName) => {
+    // Direct mapping based on camera ID
+    const idMap = {
+      'camera-1': 'NestCam',     // Interior
+      'camera-2': 'CritterCam', // Exterior 
+      'camera-3': 'NestCam',     // Interior
+      'camera-4': 'CritterCam', // Exterior
+      'camera-5': 'NestCam',     // Interior
+      'camera-6': 'CritterCam'  // Exterior
+    };
+    
+    // Use ID mapping first, fallback to name-based logic
+    return idMap[cameraId] || (cameraName && cameraName.includes('Critter') ? 'CritterCam' : 'NestCam');
+  };
+
   // Helper function to format camera data for display
   const formatCameraForDisplay = (cameraId, title, colorTheme, cameraNumber) => {
     const data = cameraData[cameraId];
     
     if (data.loading) {
       return {
+        id: cameraId,  // Add camera ID
         name: title,
         location: cameraId.includes('1') || cameraId.includes('3') || cameraId.includes('5') ? 'Interior' : 'Exterior',
         status: 'loading',
@@ -80,6 +97,7 @@ function FigmaStyleDashboard({ systemHealth }) {
     }
     if (data.error) {
       return {
+        id: cameraId,  // Add camera ID
         name: title,
         location: cameraId.includes('1') || cameraId.includes('3') || cameraId.includes('5') ? 'Interior' : 'Exterior',
         status: 'offline',
@@ -115,6 +133,7 @@ function FigmaStyleDashboard({ systemHealth }) {
       lastSeenText = hours === 1 ? '1 hour ago' : `${hours} hours ago`;
     }
     return {
+      id: cameraId,  // Add camera ID
       name: title,
       location: cameraId.includes('1') || cameraId.includes('3') || cameraId.includes('5') ? 'Interior' : 'Exterior',
       status: 'live',
@@ -404,9 +423,9 @@ function FigmaStyleDashboard({ systemHealth }) {
                       overflow: 'hidden',
                       position: 'relative'
                     }}>
-                      {cam.status === 'live' && cam.thumbnailUrl ? (
+                      {cam.status === 'live' ? (
                         <img 
-                          src={`${cam.thumbnailUrl}?t=${Date.now()}`}
+                          src={`${cam.thumbnailUrl || `/api/stream/${getCameraStreamName(cam.id, cam.name)}/thumbnail`}?t=${Date.now()}`}
                           alt={`${cam.name} thumbnail`}
                           style={{
                             width: '100%',
@@ -423,7 +442,7 @@ function FigmaStyleDashboard({ systemHealth }) {
                         style={{ 
                           fontSize: '3rem', 
                           color: cam.status === 'live' ? '#76b900' : '#888',
-                          display: (cam.status === 'live' && cam.thumbnailUrl) ? 'none' : 'block'
+                          display: cam.status !== 'live' ? 'block' : 'none'
                         }}
                       >
                         📹
@@ -448,7 +467,7 @@ function FigmaStyleDashboard({ systemHealth }) {
                         position: 'absolute',
                         top: '6px',
                         right: '6px',
-                        background: cam.status === 'recent-activity' ? '#dc3545' : '#6c757d',
+                        background: '#6c757d',
                         color: 'white',
                         fontSize: '0.6rem',
                         padding: '3px 6px',
@@ -457,7 +476,7 @@ function FigmaStyleDashboard({ systemHealth }) {
                         boxShadow: '0 1px 3px rgba(0,0,0,0.3)',
                         textTransform: 'uppercase'
                       }}>
-                        {cam.status === 'recent-activity' ? 'LIVE' : (cam.lastSeen || 'OFFLINE')}
+                        {cam.lastSeen || 'OFFLINE'}
                       </div>
                     </div>
                   </div>
@@ -901,7 +920,7 @@ function FigmaStyleDashboard({ systemHealth }) {
                       position: 'absolute',
                       top: '6px',
                       right: '6px',
-                      background: camera.status === 'live' ? '#dc3545' : '#6c757d',
+                      background: '#6c757d',
                       color: 'white',
                       fontSize: '0.7rem',
                       padding: '2px 6px',
@@ -910,33 +929,31 @@ function FigmaStyleDashboard({ systemHealth }) {
                       zIndex: 10,
                       boxShadow: '0 2px 4px rgba(0,0,0,0.3)'
                     }}>
-                      {camera.status === 'live' ? 'LIVE' : camera.lastSeen}
+                      {camera.lastSeen || 'OFFLINE'}
                     </div>
                     
                     {/* Camera Feed */}
-                    {camera.thumbnailUrl ? (
-                      <img 
-                        src={camera.thumbnailUrl}
-                        alt={`${camera.name} ${camera.status === 'live' ? 'live feed' : 'last captured'}`}
-                        style={{
-                          width: '100%',
-                          height: '100%',
-                          objectFit: 'cover',
-                          borderRadius: '6px'
-                        }}
-                        onError={(e) => {
-                          // Show fallback if image fails to load
-                          e.target.style.display = 'none';
-                          e.target.nextSibling.style.display = 'flex';
-                        }}
-                      />
-                    ) : null}
+                    <img 
+                      src={`${camera.thumbnailUrl || `/api/stream/${getCameraStreamName(camera.id, camera.name)}/thumbnail`}?t=${Date.now()}`}
+                      alt={`${camera.name} ${camera.status === 'live' ? 'live feed' : 'last captured'}`}
+                      style={{
+                        width: '100%',
+                        height: '100%',
+                        objectFit: 'cover',
+                        borderRadius: '6px'
+                      }}
+                      onError={(e) => {
+                        // Show fallback if image fails to load
+                        e.target.style.display = 'none';
+                        e.target.nextSibling.style.display = 'flex';
+                      }}
+                    />
                     
                     {/* Fallback display */}
                     <div style={{
                       width: '100%',
                       height: '100%',
-                      display: !camera.thumbnailUrl ? 'flex' : 'none',
+                      display: 'none',
                       flexDirection: 'column',
                       justifyContent: 'center',
                       alignItems: 'center',

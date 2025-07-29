@@ -7,39 +7,37 @@ import numpy as np
 try:
     from core.camera.camera_manager import CameraManager
     CAMERA_AVAILABLE = True
-    print("[stream_bp] Using real CameraManager")
+    print("[stream_bp] CameraManager class available")
 except Exception as e:
     print(f"[stream_bp] CameraManager not available: {e}")
     CAMERA_AVAILABLE = False
 
 stream_bp = Blueprint('stream', __name__)
 
-# Initialize camera manager if available
-if CAMERA_AVAILABLE:
-    try:
-        cam_mgr = CameraManager('nutpod')
-        print("[stream_bp] CameraManager initialized successfully")
-        
-        # Connect camera manager to sighting service if available
-        try:
-            import sys
-            import os
-            sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
-            from core.sighting_service import sighting_service
-            
-            # Connect the camera manager to enable motion detection
-            sighting_service.connect_camera_manager(cam_mgr)
-            print("[stream_bp] ✅ Connected camera manager to sighting service")
-            
-        except Exception as e:
-            print(f"[stream_bp] Could not connect to sighting service: {e}")
-            
-    except Exception as e:
-        print(f"[stream_bp] Failed to initialize CameraManager: {e}")
-        cam_mgr = None
-        CAMERA_AVAILABLE = False
-else:
-    cam_mgr = None
+# Camera manager will be shared from main app - don't initialize here
+cam_mgr = None
+print("[stream_bp] Waiting for camera manager to be shared from main app")
+
+def map_frontend_to_backend_camera_name(frontend_name):
+    """Map frontend camera names (camera-1, camera-2, etc.) to backend names (CritterCam, NestCam)"""
+    camera_map = {
+        'camera-1': 'NestCam',
+        'camera-2': 'CritterCam', 
+        'camera-3': 'NestCam',
+        'camera-4': 'CritterCam',
+        'camera-5': 'NestCam',
+        'camera-6': 'CritterCam',
+        # Also support direct backend names
+        'nestcam': 'NestCam',
+        'crittercam': 'CritterCam',
+        'NestCam': 'NestCam',
+        'CritterCam': 'CritterCam'
+    }
+    backend_name = camera_map.get(frontend_name.lower(), frontend_name)
+    # Only log if it's an actual mapping (not passthrough)
+    if frontend_name.lower() != backend_name.lower():
+        print(f"[stream_bp] Camera name mapping: '{frontend_name}' -> '{backend_name}'")
+    return backend_name
 
 def gen_frames(camera_name):
     """Generate camera frames for streaming"""
@@ -175,16 +173,21 @@ def stop_stream():
 @stream_bp.route('/api/stream/<camera_name>/live')
 def get_live_stream(camera_name):
     """Get live MJPEG stream for specific camera"""
-    return Response(gen_frames(camera_name), mimetype='multipart/x-mixed-replace; boundary=frame')
+    # Map frontend camera name to backend camera name
+    backend_camera_name = map_frontend_to_backend_camera_name(camera_name)
+    return Response(gen_frames(backend_camera_name), mimetype='multipart/x-mixed-replace; boundary=frame')
 
 @stream_bp.route('/api/stream/<camera_name>/snapshot')
 def get_camera_snapshot(camera_name):
     """Get a single snapshot from camera"""
+    # Map frontend camera name to backend camera name
+    backend_camera_name = map_frontend_to_backend_camera_name(camera_name)
+    
     if not CAMERA_AVAILABLE or not cam_mgr:
         return jsonify({'error': f'Camera system not available for {camera_name}'}), 503
         
     try:
-        frame = cam_mgr.get_frame(camera_name)
+        frame = cam_mgr.get_frame(backend_camera_name)
         if frame is not None:
             # Convert RGB to BGR for JPEG encoding since OpenCV expects BGR
             if len(frame.shape) == 3 and frame.shape[2] == 3:
@@ -196,30 +199,33 @@ def get_camera_snapshot(camera_name):
             if ret:
                 return Response(jpeg.tobytes(), mimetype='image/jpeg')
         else:
-            return jsonify({'error': f'No frame available from {camera_name}'}), 404
+            return jsonify({'error': f'No frame available from {backend_camera_name}'}), 404
     except Exception as e:
-        print(f"[stream_bp] Error getting snapshot from {camera_name}: {e}")
+        print(f"[stream_bp] Error getting snapshot from {backend_camera_name}: {e}")
         # Return error image
-        error_frame = create_error_frame(f"Snapshot Error: {camera_name}")
+        error_frame = create_error_frame(f"Snapshot Error: {backend_camera_name}")
         ret, jpeg = cv2.imencode('.jpg', error_frame)
         if ret:
             return Response(jpeg.tobytes(), mimetype='image/jpeg')
     
-    return jsonify({'error': f'Could not get snapshot from {camera_name}'}), 500
+    return jsonify({'error': f'Could not get snapshot from {backend_camera_name}'}), 500
 
 @stream_bp.route('/api/stream/<camera_name>/thumbnail') 
 def get_camera_thumbnail(camera_name):
     """Get a thumbnail (smaller) snapshot from camera"""
+    # Map frontend camera name to backend camera name
+    backend_camera_name = map_frontend_to_backend_camera_name(camera_name)
+    
     if not CAMERA_AVAILABLE or not cam_mgr:
         return jsonify({'error': f'Camera system not available for {camera_name}'}), 503
         
     try:
-        frame = cam_mgr.get_frame(camera_name)
+        frame = cam_mgr.get_frame(backend_camera_name)
         if frame is not None:
             # Check for motion in the frame using sighting service
             try:
                 from core.sighting_service import sighting_service
-                sighting_service.check_motion_in_frame(camera_name, frame)
+                sighting_service.check_motion_in_frame(backend_camera_name, frame)
             except Exception as motion_error:
                 # Don't let motion detection errors break thumbnail generation
                 pass
@@ -240,14 +246,14 @@ def get_camera_thumbnail(camera_name):
             if ret:
                 return Response(jpeg.tobytes(), mimetype='image/jpeg')
         else:
-            return jsonify({'error': f'No frame available from {camera_name}'}), 404
+            return jsonify({'error': f'No frame available from {backend_camera_name}'}), 404
     except Exception as e:
-        print(f"[stream_bp] Error getting thumbnail from {camera_name}: {e}")
+        print(f"[stream_bp] Error getting thumbnail from {backend_camera_name}: {e}")
         # Return error thumbnail
-        error_frame = create_error_frame(f"Thumbnail Error: {camera_name}")
+        error_frame = create_error_frame(f"Thumbnail Error: {backend_camera_name}")
         error_frame = cv2.resize(error_frame, (160, 120))
         ret, jpeg = cv2.imencode('.jpg', error_frame)
         if ret:
             return Response(jpeg.tobytes(), mimetype='image/jpeg')
     
-    return jsonify({'error': f'Could not get thumbnail from {camera_name}'}), 500
+    return jsonify({'error': f'Could not get thumbnail from {backend_camera_name}'}), 500

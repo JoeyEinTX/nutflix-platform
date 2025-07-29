@@ -14,7 +14,6 @@ A comprehensive, modular settings and privacy management system for Nutflix wild
 - **`settings_manager.py`**: Type-safe settings management with persistent storage
 - **`default_settings.yaml`**: Comprehensive schema and defaults  
 - **`integration.py`**: Backward compatibility bridge for existing code
-- **`demo_settings.py`**: Complete demonstration and testing script
 
 ### **Design Principles:**
 - **Type-Safe Access**: Dataclass-based properties with validation
@@ -286,7 +285,6 @@ ai:
 ### **Run Demo**
 ```bash
 cd /workspaces/nutflix-platform
-python3 demo_settings.py
 ```
 
 ### **Integration Test**

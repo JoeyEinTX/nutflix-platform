@@ -113,7 +113,7 @@ def main():
     
     # Show options
     print("\n🎯 What would you like to do?")
-    print("1. Run debug tests (debug_test.py)")
+    print("1. Run system status test")
     print("2. Start dashboard only")
     print("3. Start NutPod main application")
     print("4. Exit")
@@ -123,7 +123,10 @@ def main():
             choice = input("\nEnter choice (1-4): ").strip()
             
             if choice == "1":
-                run_command("source .venv/bin/activate && python3 debug_test.py", "Running debug tests")
+                if Path("test_status.py").exists():
+                    run_command("source .venv/bin/activate && python3 test_status.py", "Running system status test")
+                else:
+                    print("❌ test_status.py not found")
                 break
             elif choice == "2":
                 start_dashboard()
