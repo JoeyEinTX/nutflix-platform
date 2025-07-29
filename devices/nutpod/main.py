@@ -1,16 +1,24 @@
 
 
-import time
+import sys
 import os
+from pathlib import Path
+
+# Add the project root to Python path so we can import 'core'
+project_root = Path(__file__).parent.parent.parent
+sys.path.insert(0, str(project_root))
+
+import time
 import logging
 import threading
 from typing import Dict
 from core.config.config_manager import get_config
 from core.camera.camera_manager import CameraManager
 from core.recording_engine import RecordingEngine  
-from core.audio.audio_recorder import AudioRecorder
+# TEMPORARILY DISABLED: from core.audio.audio_recorder import AudioRecorder
 from core.sighting_service import SightingService  
 from core.motion.dual_pir_motion_detector import DualPIRMotionDetector  # New PIR motion detection
+from utils.env_sensor import EnvSensor  # BME280 environmental sensor
 
 def main():
     logging.basicConfig(
@@ -32,11 +40,17 @@ def main():
     # Use the main RecordingEngine instead of the old one
     recording_engine = RecordingEngine()
     
+    # Initialize environmental sensor (BME280)
+    env_sensor = EnvSensor()
+    logging.info("[EnvSensor] BME280 environmental sensor initialized")
+    
+    # TEMPORARILY DISABLED: Audio recording while focusing on PIR motion detection
     audio_recorder = None
-    try:
-        audio_recorder = AudioRecorder()
-    except Exception as e:
-        logging.warning(f"[Audio] AudioRecorder unavailable: {e}")
+    # try:
+    #     audio_recorder = AudioRecorder()
+    # except Exception as e:
+    #     logging.warning(f"[Audio] AudioRecorder unavailable: {e}")
+    logging.info("[Audio] Audio recording temporarily disabled - focusing on PIR motion detection")
     
     # NOTE: StreamServer removed - using dashboard's integrated streaming instead
     # This eliminates camera hardware conflicts and reduces resource usage
@@ -52,6 +66,21 @@ def main():
         
         print(f"[NutPod PIRHandler] 🚨 PIR motion detected for {camera_name} (GPIO {gpio_pin})")
         logging.info(f"[PIR Motion] Motion detected on {camera_name} at {timestamp}")
+        
+        # Save motion event to database (FIX: This was missing!)
+        try:
+            motion_data = {
+                'camera': camera_name,
+                'type': 'gpio',  # PIR sensor type
+                'confidence': 0.9,  # PIR sensors are highly reliable
+                'duration': 3.0,  # Typical PIR pulse duration
+                'gpio_pin': gpio_pin,
+                'sensor_type': motion_event.get('sensor_type', 'PIR')
+            }
+            sighting_service._record_motion_event(timestamp, motion_data)
+            logging.info(f"[PIR Motion] Saved motion event to database for {camera_name}")
+        except Exception as e:
+            logging.error(f"[PIR Motion] Database save error: {e}")
         
         # Start video recording
         try:
@@ -94,8 +123,28 @@ def main():
     logging.info("[PIR Motion] Dual PIR motion detection started for CritterCam (GPIO 18) and NestCam (GPIO 24)")
 
     # Keep sighting service for creating sightings from recordings, but disable camera motion detection
-    sighting_service = SightingService(cam_mgr)
+    sighting_service = SightingService()
+    sighting_service.camera_manager = cam_mgr  # Set camera manager manually
     # NOTE: Not starting sighting_service.start() to avoid camera conflicts
+    
+    # Environmental monitoring function
+    def monitor_environment():
+        """Periodically log environmental data from BME280"""
+        while True:
+            try:
+                env_data = env_sensor.read()
+                logging.info(f"[Environment] Temp: {env_data['temperature']}°C, "
+                           f"Humidity: {env_data['humidity']}%, "
+                           f"Pressure: {env_data['pressure']} hPa")
+                time.sleep(300)  # Log every 5 minutes
+            except Exception as e:
+                logging.error(f"[Environment] Error reading BME280: {e}")
+                time.sleep(60)  # Retry in 1 minute on error
+    
+    # Start environmental monitoring in background
+    env_thread = threading.Thread(target=monitor_environment, daemon=True)
+    env_thread.start()
+    logging.info("[Environment] BME280 monitoring started (5-minute intervals)")
     
     # Recording completion callback to create sightings from recorded clips
     def handle_recording_complete(camera_name: str, recording_metadata: Dict):
@@ -126,9 +175,9 @@ def main():
         
         while True:
             try:
-                # Look for video clips with metadata
-                clip_pattern = "clips/*.mp4"
-                metadata_pattern = "clips/*.mp4.json"
+                # Look for video clips with metadata (FIX: Changed from .mp4 to .h264)
+                clip_pattern = "clips/*.h264"
+                metadata_pattern = "clips/*.h264.json"
                 
                 metadata_files = glob.glob(metadata_pattern)
                 

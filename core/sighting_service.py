@@ -34,11 +34,9 @@ class SightingService:
         self.recent_sightings = []  # In-memory cache for quick access
         self.sighting_callbacks = []  # For real-time updates
         
-        # Initialize motion detectors immediately
-        self.motion_detectors = {
-            'CritterCam': None,  # Will be initialized when needed
-            'NestCam': None
-        }
+        # DEPRECATED: Motion detectors disabled - now using PIR sensors
+        # Camera-based motion detection replaced with PIR hardware sensors
+        self.motion_detectors = {}  # Empty - no camera motion detection
         self.motion_threads = {}
         
         # Initialize database
@@ -81,27 +79,15 @@ class SightingService:
         conn.commit()
         conn.close()
         
-    def start_detection(self):
-        """Start the motion detection and sighting system"""
+    def start(self):
+        """Start the sighting service (no camera motion detection - PIR only)"""
         if self.running:
             return
             
         self.running = True
         
-        # Initialize components
-        try:
-            # Import the VisionMotionDetector
-            from core.motion.motion_detector import VisionMotionDetector
-            
-            # Initialize vision-based motion detectors
-            self.motion_detectors['CritterCam'] = VisionMotionDetector(motion_sensitivity=0.3, cooldown_sec=2.0)
-            self.motion_detectors['NestCam'] = VisionMotionDetector(motion_sensitivity=0.3, cooldown_sec=2.0)
-            
-            print("✅ Sighting service started - ready for vision-based motion detection")
-            
-        except Exception as e:
-            print(f"❌ Error starting sighting service: {e}")
-            self.running = False
+        print("✅ Sighting service started - PIR motion detection mode (no camera conflicts)")
+        print("📡 Camera motion detection DISABLED - using PIR sensors instead")
             
     def connect_camera_manager(self, camera_manager):
         """Connect an existing camera manager to avoid camera conflicts"""
@@ -111,34 +97,13 @@ class SightingService:
         available_cameras = self.camera_manager.get_available_cameras()
         print(f"📹 Connected to cameras: {available_cameras}")
         
-        # Initialize VisionMotionDetectors if not already done
-        if not self.running:
-            from core.motion.motion_detector import VisionMotionDetector
-            for camera_name in available_cameras:
-                if camera_name in self.motion_detectors and self.motion_detectors[camera_name] is None:
-                    self.motion_detectors[camera_name] = VisionMotionDetector(motion_sensitivity=0.3, cooldown_sec=2.0)
-                    
-        print("🎥 Vision-based motion detection connected and ready!")
+        # NO MOTION DETECTION INITIALIZATION - PIR sensors handle motion
+        print("🚨 PIR motion detection active - camera motion detection disabled!")
         
     def check_motion_in_frame(self, camera_name: str, frame):
-        """Check for motion in a frame (called from streaming service)"""
-        if not self.running or camera_name not in self.motion_detectors:
-            return False
-            
-        detector = self.motion_detectors[camera_name]
-        if detector is None:
-            # Initialize detector if not done yet
-            from core.motion.motion_detector import VisionMotionDetector
-            detector = VisionMotionDetector(motion_sensitivity=0.3, cooldown_sec=2.0)
-            self.motion_detectors[camera_name] = detector
-            
-        motion_detected = detector.detect_motion(frame)
-        
-        if motion_detected:
-            timestamp = datetime.now().isoformat()
-            self._on_vision_motion_detected(camera_name, timestamp, detector)
-            
-        return motion_detected
+        """DEPRECATED: Camera motion detection disabled - PIR sensors used instead"""
+        # Always return False - no camera-based motion detection
+        return False
             
     def stop_detection(self):
         """Stop the motion detection system"""
@@ -188,60 +153,10 @@ class SightingService:
         thread.start()
         
     def _on_vision_motion_detected(self, camera_name: str, timestamp: str, detector):
-        """Callback when vision-based motion is detected"""
-        try:
-            print(f"[SightingService] 📡 Vision motion event received for {camera_name}")
-            
-            # Get current frame for IR analysis
-            current_frame = None
-            if self.camera_manager:
-                try:
-                    current_frame = self.camera_manager.get_frame(camera_name)
-                except Exception as e:
-                    print(f"⚠️ Could not get current frame for IR analysis: {e}")
-            
-            # Smart IR LED activation for low light conditions
-            if SMART_IR_AVAILABLE and smart_ir_controller:
-                smart_ir_controller.on_motion_detected(camera_name, current_frame)
-            
-            # Capture thumbnail for this motion event
-            thumbnail_path = None
-            if current_frame is not None:
-                thumbnail_path = self._save_motion_thumbnail(camera_name, timestamp, current_frame)
-            
-            # Create motion data from vision detection
-            last_motion = detector.get_last_motion_time()
-            motion_data = {
-                'camera': camera_name,
-                'type': 'vision',
-                'confidence': 0.90,  # High confidence for vision detection
-                'duration': 3.0,     # Assume average duration
-                'zone': 'center',
-                'last_motion_time': last_motion.isoformat() if last_motion else timestamp,
-                'thumbnail_path': thumbnail_path
-            }
-            
-            # Determine species based on motion characteristics
-            species = self._classify_motion(motion_data)
-            
-            # Record motion event
-            self._record_motion_event(timestamp, motion_data)
-            
-            # Create sighting entry
-            sighting = self._create_sighting(timestamp, species, motion_data)
-            
-            # Add to cache
-            self.recent_sightings.insert(0, sighting)
-            if len(self.recent_sightings) > 100:
-                self.recent_sightings = self.recent_sightings[:100]
-                
-            # Notify callbacks (for real-time updates)
-            self._notify_sighting_callbacks(sighting)
-            
-            print(f"🐿️ Motion detected! New sighting: {species} on {camera_name} at {timestamp}")
-            
-        except Exception as e:
-            print(f"❌ Error processing vision motion detection: {e}")
+        """DEPRECATED: Vision-based motion detection disabled - PIR sensors used instead"""
+        # This function is no longer called since camera motion detection is disabled
+        print(f"[SightingService] ⚠️ Vision motion detection called but DISABLED - using PIR sensors")
+        return
             
     def _classify_motion(self, motion_data: Dict) -> str:
         """Simple motion classification - can be enhanced with AI later"""
@@ -455,23 +370,24 @@ class SightingService:
                 print(f"❌ Error in sighting callback: {e}")
                 
     def get_recent_sightings(self, limit: int = 10, camera: Optional[str] = None) -> list:
-        """Get recent sightings from database, optionally filtered by camera"""
+        """Get recent sightings from database, reading from motion_events table"""
         conn = sqlite3.connect(self.db_path)
         conn.row_factory = sqlite3.Row
         cur = conn.cursor()
         
+        # FIX: Read from motion_events instead of clip_metadata
         if camera:
             cur.execute('''
-                SELECT timestamp, species, behavior, confidence, camera, motion_zone, clip_path, thumbnail_path
-                FROM clip_metadata
+                SELECT timestamp, camera, motion_type, confidence, duration, created_at
+                FROM motion_events
                 WHERE camera = ?
                 ORDER BY created_at DESC
                 LIMIT ?
             ''', (camera, limit))
         else:
             cur.execute('''
-                SELECT timestamp, species, behavior, confidence, camera, motion_zone, clip_path, thumbnail_path
-                FROM clip_metadata
+                SELECT timestamp, camera, motion_type, confidence, duration, created_at
+                FROM motion_events
                 ORDER BY created_at DESC
                 LIMIT ?
             ''', (limit,))
@@ -479,7 +395,7 @@ class SightingService:
         rows = cur.fetchall()
         conn.close()
         
-        # Format results
+        # Format results to match expected sighting format
         results = []
         for row in rows:
             ts = row['timestamp']
@@ -490,14 +406,25 @@ class SightingService:
                     ts_fmt = dt.strftime('%B %d, %Y %I:%M %p')
                 except Exception:
                     pass  # Leave ts_fmt as original string
+            
+            # Convert motion event to sighting format
+            species = "Wildlife" if row['motion_type'] == 'gpio' else "Unknown"
+            behavior = "motion_detected"
+            if row['duration'] and row['duration'] > 5:
+                behavior = "investigating"
+            elif row['duration'] and row['duration'] > 2:
+                behavior = "foraging"
+            else:
+                behavior = "passing"
+                
             results.append({
-                'species': row['species'],
-                'behavior': row['behavior'],
-                'confidence': row['confidence'],
+                'species': species,
+                'behavior': behavior,
+                'confidence': row['confidence'] or 0.8,
                 'camera': row['camera'],
-                'motion_zone': row['motion_zone'],
-                'clip_path': row['clip_path'],
-                'thumbnail_path': row['thumbnail_path'],
+                'motion_zone': 'detected',
+                'clip_path': None,  # No clip path from motion events
+                'thumbnail_path': None,  # No thumbnail from motion events
                 'timestamp': ts_fmt,
                 'raw_timestamp': ts
             })

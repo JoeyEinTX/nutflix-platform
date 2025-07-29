@@ -100,6 +100,9 @@ class DualPIRMotionDetector:
         
         print(f"[DualPIRMotionDetector] Monitoring {camera_name} on GPIO {gpio_pin} (AM312 sensor)")
         
+        # Debug counter for periodic state reporting
+        debug_counter = 0
+        
         while self.running:
             try:
                 if GPIO_AVAILABLE:
@@ -109,8 +112,26 @@ class DualPIRMotionDetector:
                     import random
                     current_state = random.random() < 0.001  # Very low probability per loop
                 
-                # Edge detection: trigger only on LOW to HIGH transition (motion start)
+                # Debug: Report current state every 10 seconds
+                debug_counter += 1
+                if debug_counter % 100 == 0:  # Every ~10 seconds (100 * 0.1s sleep)
+                    state_name = "HIGH" if current_state else "LOW"
+                    print(f"[DualPIRMotionDetector] 🔍 {camera_name} state: {state_name} (last_state: {sensor_config['last_state']})")
+                
+                # Edge detection: trigger on LOW to HIGH transition (motion start)
+                # TEMP: Also trigger HIGH to LOW for testing stuck sensor
+                motion_detected = False
+                
                 if current_state and not sensor_config['last_state']:
+                    # Normal LOW→HIGH transition (motion detected)
+                    motion_detected = True
+                    motion_type = "motion_start"
+                elif not current_state and sensor_config['last_state']:
+                    # HIGH→LOW transition (motion ended) - temporary for debugging
+                    motion_detected = True
+                    motion_type = "motion_end"
+                
+                if motion_detected:
                     current_time = time.time()
                     
                     # Check cooldown period
@@ -118,7 +139,7 @@ class DualPIRMotionDetector:
                         sensor_config['last_detection'] = current_time
                         
                         timestamp = datetime.now()
-                        print(f"[DualPIRMotionDetector] 🚨 Motion detected on {camera_name} at {timestamp.strftime('%H:%M:%S')} (AM312)")
+                        print(f"[DualPIRMotionDetector] 🚨 {motion_type.upper()} on {camera_name} at {timestamp.strftime('%H:%M:%S')} (AM312)")
                         
                         # Create motion event
                         motion_event = {
@@ -127,7 +148,8 @@ class DualPIRMotionDetector:
                             'sensor_type': 'AM312_PIR',
                             'detection_method': 'hardware_motion_sensor',
                             'trigger_type': 'pir_motion',
-                            'gpio_pin': gpio_pin
+                            'gpio_pin': gpio_pin,
+                            'motion_type': motion_type
                         }
                         
                         # Trigger callback

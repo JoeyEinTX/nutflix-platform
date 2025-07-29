@@ -34,7 +34,54 @@ except ImportError as e:
     print(f"❌ Sighting service not available: {e}")
     SIGHTING_SERVICE_AVAILABLE = False
 
+# Import PIR motion detector
+try:
+    from core.motion.dual_pir_motion_detector import DualPIRMotionDetector
+    PIR_DETECTOR_AVAILABLE = True
+    print("✅ PIR motion detector imported successfully")
+except ImportError as e:
+    print(f"❌ PIR motion detector not available: {e}")
+    PIR_DETECTOR_AVAILABLE = False
+
 app = Flask(__name__)
+
+# PIR motion detector instance
+pir_detector = None
+
+# PIR motion callback to connect with sighting service
+def pir_motion_callback(camera_name: str, motion_event: dict):
+    """Handle PIR motion detection events"""
+    print(f"🔥 CALLBACK TRIGGERED! camera_name={camera_name}")
+    print(f"🔥 CALLBACK motion_event={motion_event}")
+    
+    try:
+        print(f"🚨 PIR Motion detected: {camera_name} - {motion_event}")
+        
+        if SIGHTING_SERVICE_AVAILABLE:
+            print(f"🔥 SIGHTING SERVICE AVAILABLE - proceeding")
+            # Create motion data compatible with sighting service
+            motion_data = {
+                'camera': camera_name,
+                'motion_type': 'gpio',  # PIR sensor type
+                'confidence': 0.95,     # PIR sensors are very reliable
+                'detection_method': motion_event.get('detection_method', 'hardware_motion_sensor'),
+                'sensor_type': motion_event.get('sensor_type', 'PIR'),
+                'gpio_pin': motion_event.get('gpio_pin'),
+                'trigger_type': motion_event.get('trigger_type', 'pir_motion')
+            }
+            
+            print(f"🔥 CALLING _record_motion_event with motion_data={motion_data}")
+            # Record the motion event
+            timestamp = motion_event.get('timestamp')
+            sighting_service._record_motion_event(timestamp, motion_data)
+            print(f"✅ Motion event recorded to database: {camera_name}")
+        else:
+            print(f"❌ SIGHTING SERVICE NOT AVAILABLE!")
+            
+    except Exception as e:
+        print(f"❌ Error handling PIR motion: {e}")
+        import traceback
+        print(f"🔥 FULL TRACEBACK: {traceback.format_exc()}")
 
 # Configure CORS for React frontend
 CORS(app, origins=[
@@ -76,12 +123,13 @@ except ImportError as e:
     print(f"Health module not available: {e}")
     blueprints_config.append(('health', None, False))
 
-try:
-    from routes.dashboard import dashboard_bp
-    blueprints_config.append(('dashboard', dashboard_bp, True))
-except ImportError as e:
-    print(f"Dashboard module not available: {e}")
-    blueprints_config.append(('dashboard', None, False))
+# OLD DASHBOARD MODULE REMOVED - React app at /app is the only dashboard
+# try:
+#     from routes.dashboard import dashboard_bp
+#     blueprints_config.append(('dashboard', dashboard_bp, True))
+# except ImportError as e:
+#     print(f"Dashboard module not available: {e}")
+#     blueprints_config.append(('dashboard', None, False))
 
 try:
     from routes.research import research_bp
@@ -172,7 +220,7 @@ def api_start_motion_detection():
         return jsonify({'error': 'Sighting service not available'}), 503
         
     try:
-        sighting_service.start_detection()
+        sighting_service.start()
         return jsonify({'status': 'started', 'message': 'Motion detection activated'})
     except Exception as e:
         return jsonify({'error': str(e)}), 500
@@ -425,6 +473,7 @@ def get_clip_thumbnail(camera_id):
         return redirect(f'/api/stream/{camera_id}/thumbnail')
 
 # Serve React static files in production
+@app.route('/static/<path:path>')
 @app.route('/app/static/<path:path>')
 def serve_static(path):
     """Serve React static files (CSS, JS, etc.)"""
@@ -436,37 +485,6 @@ def serve_static(path):
     else:
         return "Static file not found", 404
 
-@app.route('/app')
-@app.route('/app/<path:path>')
-def serve_react_app(path=''):
-    """Serve React app static files"""
-    frontend_build = Path(__file__).parent.parent / 'frontend' / 'build'
-    
-    if frontend_build.exists():
-        # Handle static files
-        if path.startswith('static/'):
-            static_file = path[7:]  # Remove 'static/' prefix
-            return serve_static(static_file)
-        # Handle other assets (favicon, manifest, etc.)
-        elif path and (frontend_build / path).exists():
-            return send_from_directory(frontend_build, path)
-        else:
-            return send_from_directory(frontend_build, 'index.html')
-    else:
-        return jsonify({
-            'error': 'React frontend not built',
-            'message': 'Run "npm run build" in the frontend directory'
-        }), 404
-
-# Fallback endpoints for missing modules
-@app.route('/clips')
-def fallback_clips():
-    return render_template('clips.html') if Path('templates/clips.html').exists() else jsonify({'error': 'Clips module not available'})
-
-@app.route('/settings') 
-def fallback_settings():
-    return render_template('settings.html') if Path('templates/settings.html').exists() else jsonify({'error': 'Settings module not available'})
-
 @app.route('/health')
 def fallback_health():
     return jsonify({
@@ -476,26 +494,33 @@ def fallback_health():
 
 @app.route('/')
 def home():
-    """Home route - redirect to React app or fallback to dashboard"""
+    """Root route - redirect to main React dashboard"""
+    return redirect('/app')
+
+@app.route('/app')
+@app.route('/app/<path:path>')
+def serve_react_app(path=''):
+    """MAIN DASHBOARD - Serve React app (the only dashboard we use)"""
     frontend_build = Path(__file__).parent.parent / 'frontend' / 'build'
     
-    if frontend_build.exists():
-        return redirect('/app')
-    else:
-        # Fallback to existing dashboard
-        for name, _, available in blueprints_config:
-            if name == 'dashboard' and available:
-                return redirect('/dashboard')
-            elif name == 'clips' and available:
-                return redirect('/clips')
-        
+    if not frontend_build.exists():
         return jsonify({
-            'message': 'Nutflix Platform API',
-            'frontend': 'React app not built - run "npm run build" in frontend/',
-            'api_docs': '/api/status'
-        })
+            'error': 'React frontend not built',
+            'message': 'Run "npm run build" in the frontend directory'
+        }), 404
+    
+    # Handle static files
+    if path.startswith('static/'):
+        static_file = path[7:]  # Remove 'static/' prefix
+        return serve_static(static_file)
+    # Handle other assets (favicon, manifest, etc.)
+    elif path and (frontend_build / path).exists():
+        return send_from_directory(frontend_build, path)
+    else:
+        # Always serve React index.html for the main app
+        return send_from_directory(frontend_build, 'index.html')
 
-if __name__ == '__main__':
+if __name__ == '__main__':    
     # Start sighting service if available
     if SIGHTING_SERVICE_AVAILABLE:
         print("🚀 Starting motion detection and sighting service...")
@@ -510,9 +535,30 @@ if __name__ == '__main__':
             print("🔗 Camera manager connected to sighting service")
             
             # Start the motion detection system
-            sighting_service.start_detection()
+            sighting_service.start()
             print("✅ Motion detection started")
         except Exception as e:
             print(f"❌ Failed to start sighting service: {e}")
+    
+    # Initialize PIR motion detection
+    if PIR_DETECTOR_AVAILABLE and SIGHTING_SERVICE_AVAILABLE:
+        print("🚨 Initializing PIR motion detection...")
+        print(f"🔥 PIR_DETECTOR_AVAILABLE={PIR_DETECTOR_AVAILABLE}")
+        print(f"🔥 SIGHTING_SERVICE_AVAILABLE={SIGHTING_SERVICE_AVAILABLE}")
+        try:
+            print("🔥 Creating DualPIRMotionDetector instance...")
+            pir_detector = DualPIRMotionDetector(motion_callback=pir_motion_callback)
+            print("🔥 PIR detector created, calling start_detection()...")
+            pir_detector.start_detection()
+            print("✅ PIR motion detector started for both cameras")
+            print("🔥 PIR detector threads should now be monitoring GPIO 18 and 24")
+        except Exception as e:
+            print(f"❌ Failed to start PIR motion detector: {e}")
+            import traceback
+            print(f"🔥 PIR STARTUP TRACEBACK: {traceback.format_exc()}")
+    else:
+        print(f"❌ PIR motion detection NOT started:")
+        print(f"   PIR_DETECTOR_AVAILABLE={PIR_DETECTOR_AVAILABLE}")
+        print(f"   SIGHTING_SERVICE_AVAILABLE={SIGHTING_SERVICE_AVAILABLE}")
     
     app.run(host='0.0.0.0', port=8000, debug=False)
