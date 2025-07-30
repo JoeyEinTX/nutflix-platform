@@ -19,48 +19,42 @@ def index():
 @clips_bp.route('/api/clips')
 def get_clips():
     """Get list of video clips"""
-    # Mock data for now - replace with actual file listing later
-    mock_clips = [
-        {
-            'id': 'clip_001',
-            'filename': 'squirrel_2025_01_23_14_30.mp4',
-            'timestamp': '2025-01-23T14:30:00Z',
-            'duration': 45,
-            'camera': 'CritterCam',
-            'species': 'squirrel',
-            'thumbnail': '/api/clips/clip_001/thumbnail',
-            'size': '2.3MB'
-        },
-        {
-            'id': 'clip_002', 
-            'filename': 'bird_2025_01_23_12_15.mp4',
-            'timestamp': '2025-01-23T12:15:00Z',
-            'duration': 32,
-            'camera': 'NestCam',
-            'species': 'cardinal',
-            'thumbnail': '/api/clips/clip_002/thumbnail',
-            'size': '1.8MB'
-        },
-        {
-            'id': 'clip_003',
-            'filename': 'raccoon_2025_01_22_22_45.mp4', 
-            'timestamp': '2025-01-22T22:45:00Z',
-            'duration': 67,
-            'camera': 'CritterCam',
-            'species': 'raccoon',
-            'thumbnail': '/api/clips/clip_003/thumbnail',
-            'size': '3.1MB'
-        }
-    ]
-    
-    limit = request.args.get('limit', type=int)
-    if limit:
-        mock_clips = mock_clips[:limit]
-    
-    return jsonify({
-        'clips': mock_clips,
-        'total': len(mock_clips)
-    })
+    try:
+        from core.clip_manager import ClipManager
+        
+        clip_manager = ClipManager()
+        limit = request.args.get('limit', 20, type=int)
+        days_back = request.args.get('days_back', 7, type=int)
+        
+        # Get real clips from the system
+        clips = clip_manager.scan_clips(days_back=days_back)
+        
+        # Limit results if requested
+        if limit:
+            clips = clips[:limit]
+        
+        # Convert ClipInfo objects to JSON format
+        clip_data = []
+        for clip in clips:
+            clip_data.append({
+                'id': clip.filename.stem,  # Remove extension for ID
+                'filename': clip.filename.name,
+                'timestamp': clip.timestamp.isoformat(),
+                'duration': clip.duration,
+                'camera': clip.camera_id,
+                'trigger_type': clip.trigger_type,
+                'thumbnail': f'/api/clips/{clip.filename.stem}/thumbnail',
+                'size': f'{clip.file_size / 1024 / 1024:.1f}MB'
+            })
+        
+        return jsonify({
+            'clips': clip_data,
+            'total': len(clip_data)
+        })
+        
+    except Exception as e:
+        print(f"[clips_bp] Error getting clips: {e}")
+        return jsonify({'error': str(e), 'clips': [], 'total': 0}), 500
 
 @clips_bp.route('/api/clips/<clip_id>')
 def get_clip(clip_id):
@@ -94,35 +88,54 @@ def get_clip_thumbnail(clip_id):
     import cv2
     import numpy as np
     
-    # For now, generate a mock thumbnail
-    # In production, this would extract a frame from the actual video file
+    # Try to get actual thumbnail from video file
     try:
-        # Create a mock thumbnail image
+        from core.clip_manager import ClipManager
+        from core.utils.video_thumbnail_extractor import VideoThumbnailExtractor
+        
+        clip_manager = ClipManager()
+        clips = clip_manager.scan_clips(days_back=30)  # Look back further for thumbnails
+        
+        # Find the clip by ID
+        target_clip = None
+        for clip in clips:
+            if clip.filename.stem == clip_id:
+                target_clip = clip
+                break
+        
+        if target_clip and target_clip.filepath.exists():
+            # Try to find existing thumbnail
+            thumbnail_path = target_clip.filepath.with_suffix('.jpg')
+            
+            if thumbnail_path.exists():
+                # Serve existing thumbnail
+                return send_file(str(thumbnail_path), mimetype='image/jpeg')
+            else:
+                # Generate thumbnail from video
+                extractor = VideoThumbnailExtractor()
+                success = extractor.extract_thumbnail_from_mp4(
+                    str(target_clip.filepath), 
+                    str(thumbnail_path)
+                )
+                
+                if success and thumbnail_path.exists():
+                    return send_file(str(thumbnail_path), mimetype='image/jpeg')
+        
+        # Fallback - return a "no thumbnail" image
+        import cv2
+        import numpy as np
         img = np.zeros((120, 160, 3), dtype=np.uint8)
-        
-        # Different colors/content based on clip type
-        if 'squirrel' in clip_id or 'clip_001' in clip_id:
-            img[:] = [40, 60, 20]  # Dark green background
-            cv2.circle(img, (80, 60), 15, (0, 255, 255), -1)  # Yellow circle (squirrel)
-        elif 'bird' in clip_id or 'clip_002' in clip_id:
-            img[:] = [60, 40, 40]  # Dark blue background  
-            cv2.circle(img, (80, 60), 12, (0, 0, 200), -1)  # Red circle (cardinal)
-        elif 'raccoon' in clip_id or 'clip_003' in clip_id:
-            img[:] = [30, 30, 30]  # Dark gray background
-            cv2.circle(img, (80, 60), 18, (100, 100, 100), -1)  # Gray circle (raccoon)
-        else:
-            img[:] = [20, 40, 60]  # Default dark background
-            cv2.rectangle(img, (70, 50), (90, 70), (255, 255, 255), -1)
-        
-        # Add timestamp overlay
-        cv2.putText(img, '14:30', (5, 15), cv2.FONT_HERSHEY_SIMPLEX, 0.4, (255, 255, 255), 1)
+        img[:] = [50, 50, 50]  # Gray background
+        cv2.putText(img, 'No Thumbnail', (20, 60), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 1)
+        cv2.putText(img, clip_id[:10], (20, 80), cv2.FONT_HERSHEY_SIMPLEX, 0.4, (200, 200, 200), 1)
         
         # Encode as JPEG
         ret, jpeg = cv2.imencode('.jpg', img, [cv2.IMWRITE_JPEG_QUALITY, 85])
         if ret:
             from io import BytesIO
             return send_file(BytesIO(jpeg.tobytes()), mimetype='image/jpeg', as_attachment=False)
+            
     except Exception as e:
-        print(f"[clips_bp] Error generating thumbnail for {clip_id}: {e}")
+        print(f"[clips_bp] Error getting thumbnail for {clip_id}: {e}")
     
     return jsonify({'error': f'Could not generate thumbnail for {clip_id}'}), 404

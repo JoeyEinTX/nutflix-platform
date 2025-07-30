@@ -43,14 +43,28 @@ except ImportError as e:
     print(f"❌ PIR motion detector not available: {e}")
     PIR_DETECTOR_AVAILABLE = False
 
+# NEW: Import RecordingEngine for clip recording
+try:
+    from core.recording_engine import RecordingEngine
+    RECORDING_ENGINE_AVAILABLE = True
+    print("✅ RecordingEngine imported successfully")
+except ImportError as e:
+    print(f"❌ RecordingEngine not available: {e}")
+    RECORDING_ENGINE_AVAILABLE = False
+
 app = Flask(__name__)
 
 # PIR motion detector instance
 pir_detector = None
 
+# NEW: RecordingEngine instance for clip recording
+recording_engine = None
+
 # PIR motion callback to connect with sighting service
 def pir_motion_callback(camera_name: str, motion_event: dict):
     """Handle PIR motion detection events"""
+    global recording_engine  # NEW: Access global recording_engine instance
+    
     try:
         print(f"🚨 PIR Motion detected: {camera_name}")
         
@@ -72,6 +86,30 @@ def pir_motion_callback(camera_name: str, motion_event: dict):
             print(f"✅ Motion event recorded to database: {camera_name}")
         else:
             print(f"❌ Sighting service not available!")
+        
+        # NEW: Smart clip recording logic - only on motion START
+        motion_type = motion_event.get('motion_type', 'unknown')
+        if RECORDING_ENGINE_AVAILABLE and recording_engine and motion_type == 'MOTION_START':
+            try:
+                print(f"🎬 PIR Motion START - Starting/extending clip recording for {camera_name}")
+                success = recording_engine.start_recording(
+                    camera_id=camera_name,
+                    duration=10.0,  # 10 seconds after motion ends
+                    trigger_type='pir_motion'
+                )
+                if success:
+                    print(f"✅ Recording started/extended for {camera_name}")
+                else:
+                    print(f"❌ Failed to start recording for {camera_name}")
+            except Exception as recording_error:
+                print(f"❌ Recording error for {camera_name}: {recording_error}")
+        elif RECORDING_ENGINE_AVAILABLE and motion_type == 'MOTION_END':
+            print(f"🏁 PIR Motion END - {camera_name} recording will continue for 10s timeout")
+        else:
+            if not RECORDING_ENGINE_AVAILABLE:
+                print(f"❌ RecordingEngine not available for {camera_name}")
+            else:
+                print(f"📊 PIR event recorded: {camera_name} ({motion_type})")
             
     except Exception as e:
         print(f"❌ Error handling PIR motion: {e}")
@@ -421,8 +459,60 @@ def get_clip_thumbnail(camera_id):
     try:
         print(f"🔍 Thumbnail request for camera_id: {camera_id}")
         
-        # Always redirect to live camera thumbnail since we don't have video clips yet
-        # This will show the actual camera feed thumbnail instead of placeholder
+        # NEW: Try to get actual clip thumbnail from database
+        try:
+            import sqlite3
+            from pathlib import Path  # NEW: Import Path for file operations
+            
+            # Map frontend camera names to backend names
+            camera_map = {
+                'nestcam': 'NestCam',
+                'crittercam': 'CritterCam',
+                'camera-1': 'NestCam',
+                'camera-2': 'CritterCam', 
+                'camera-3': 'NestCam',
+                'camera-4': 'CritterCam',
+                'camera-5': 'NestCam',
+                'camera-6': 'CritterCam'
+            }
+            backend_camera_name = camera_map.get(camera_id.lower(), camera_id)
+            
+            # Query for latest clip with thumbnail for this camera
+            conn = sqlite3.connect('/home/p12146/NutFlix/nutflix-platform/nutflix.db')
+            cur = conn.cursor()
+            
+            cur.execute('''
+                SELECT clip_path FROM clip_metadata 
+                WHERE camera = ? AND clip_path IS NOT NULL
+                ORDER BY created_at DESC 
+                LIMIT 1
+            ''', (backend_camera_name,))
+            
+            result = cur.fetchone()
+            conn.close()
+            
+            if result:
+                clip_path = result[0]
+                # Look for thumbnail next to the clip
+                clip_path_obj = Path(clip_path)
+                thumbnail_path = clip_path_obj.with_suffix('.jpg')
+                
+                if thumbnail_path.exists():
+                    print(f"📸 Serving clip thumbnail: {thumbnail_path}")
+                    return send_from_directory(
+                        thumbnail_path.parent,
+                        thumbnail_path.name,
+                        mimetype='image/jpeg'
+                    )
+                else:
+                    print(f"⚠️ Thumbnail not found: {thumbnail_path}")
+            else:
+                print(f"⚠️ No clips found for camera: {backend_camera_name}")
+                
+        except Exception as db_error:
+            print(f"❌ Database query error: {db_error}")
+        
+        # Fallback to live camera thumbnail
         live_thumbnail_url = f'/api/stream/{camera_id}/thumbnail'
         print(f"🔄 Redirecting to live thumbnail: {live_thumbnail_url}")
         return redirect(live_thumbnail_url)
@@ -523,5 +613,19 @@ if __name__ == '__main__':
         print(f"❌ PIR motion detection NOT started:")
         print(f"   PIR_DETECTOR_AVAILABLE={PIR_DETECTOR_AVAILABLE}")
         print(f"   SIGHTING_SERVICE_AVAILABLE={SIGHTING_SERVICE_AVAILABLE}")
+    
+    # NEW: Initialize RecordingEngine for clip recording
+    if RECORDING_ENGINE_AVAILABLE:
+        print("🎬 Initializing RecordingEngine...")
+        try:
+            # Pass the shared camera_manager to avoid conflicts
+            recording_engine = RecordingEngine(camera_manager=camera_manager)
+            print("✅ RecordingEngine initialized successfully with shared camera manager")
+        except Exception as e:
+            print(f"❌ Failed to initialize RecordingEngine: {e}")
+            recording_engine = None
+    else:
+        print("❌ RecordingEngine not available")
+        recording_engine = None
     
     app.run(host='0.0.0.0', port=8000, debug=False)

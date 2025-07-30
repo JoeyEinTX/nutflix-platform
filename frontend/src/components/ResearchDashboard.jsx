@@ -10,7 +10,7 @@ function ResearchDashboard({ systemHealth }) {
     // For now, we'll simulate the data structure
     
     // Simulate /research/sightings endpoint
-    const mockSightings = [
+    const sightingsData = [
       {
         species: 'Eastern Gray Squirrel',
         behavior: 'Foraging',
@@ -50,7 +50,7 @@ function ResearchDashboard({ systemHealth }) {
     ];
 
     // Simulate /research/trends endpoint
-    const mockTrends = {
+    const trendsData = {
       labels: ['12:00 PM', '12:30 PM', '1:00 PM', '1:30 PM', '2:00 PM', '2:30 PM'],
       datasets: [
         {
@@ -79,8 +79,8 @@ function ResearchDashboard({ systemHealth }) {
 
     // Simulate API delay
     setTimeout(() => {
-      setSightingsData(mockSightings);
-      setTrendsData(mockTrends);
+      setSightingsData(sightingsData);
+      setTrendsData(trendsData);
       setLoading(false);
     }, 1000);
   }, []);
@@ -340,7 +340,7 @@ function ResearchDashboard({ systemHealth }) {
           • <code>/research</code> - Research dashboard overview<br/><br/>
           
           <strong>Next Steps:</strong><br/>
-          • Replace mock data with real Flask API calls<br/>
+          • Replace placeholder data with real Flask API calls<br/>
           • Add Chart.js for environmental trend visualization<br/>
           • Implement video clip viewing functionality<br/>
           • Add filtering and search capabilities

@@ -217,7 +217,7 @@ function FigmaStyleDashboard({ systemHealth }) {
     ]);
   };
 
-  // Mock data for multiple SquirrelBoxes with camera-specific sightings
+  // Camera-specific data for multiple SquirrelBoxes
   const squirrelBoxes = [
     {
       id: 1,

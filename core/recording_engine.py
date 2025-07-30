@@ -15,6 +15,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Optional, Dict, Any
 import subprocess
+import sqlite3  # NEW: For database integration
 
 try:
     from picamera2 import Picamera2
@@ -32,13 +33,20 @@ logger = logging.getLogger(__name__)
 class RecordingEngine:
     """Coordinates motion-triggered video clip recording with IR LED support"""
     
-    def __init__(self, settings_manager=None):
+    def __init__(self, settings_manager=None, camera_manager=None):
         self.settings = settings_manager
-        try:
-            self.camera_manager = CameraManager('nutpod')  # Default device name
-        except Exception as e:
-            logger.warning(f"⚠️ CameraManager initialization failed: {e}, using mock")
-            self.camera_manager = None
+        
+        # Use shared camera manager if provided, otherwise create new one
+        if camera_manager:
+            self.camera_manager = camera_manager
+            logger.info("🎬 RecordingEngine using shared camera manager")
+        else:
+            try:
+                self.camera_manager = CameraManager('nutpod')  # Default device name
+                logger.info("🎬 RecordingEngine created new camera manager")
+            except Exception as e:
+                logger.error(f"❌ CameraManager initialization failed: {e}")
+                self.camera_manager = None
         
         self.ir_controller = SmartIRController()
         
@@ -47,6 +55,19 @@ class RecordingEngine:
         self._recording_lock = threading.Lock()
         
         logger.info("🎬 RecordingEngine initialized")
+    
+    def _extend_recording(self, camera_id: str, additional_duration: float = 10.0):
+        """Extend an active recording by updating its end time"""
+        if camera_id in self.active_recordings:
+            context = self.active_recordings[camera_id]
+            # Update the end time to extend recording
+            import datetime
+            current_time = datetime.datetime.now()
+            new_end_time = current_time + datetime.timedelta(seconds=additional_duration)
+            context['end_time'] = new_end_time
+            logger.info(f"⏰ Extended recording for {camera_id} by {additional_duration}s (ends at {new_end_time.strftime('%H:%M:%S')})")
+            return True
+        return False
     
     def start_recording(self, camera_id: str, duration: float = 10.0, use_ir: bool = None, trigger_type: str = "motion") -> bool:
         """
@@ -64,8 +85,13 @@ class RecordingEngine:
         with self._recording_lock:
             # Check if this camera is already recording
             if camera_id in self.active_recordings:
-                logger.warning(f"📹 {camera_id} is already recording, skipping new request")
-                return False
+                # NEW: For PIR motion, extend the recording instead of skipping
+                if trigger_type == "pir_motion":
+                    self._extend_recording(camera_id, duration)
+                    return True
+                else:
+                    logger.warning(f"📹 {camera_id} is already recording, skipping new request")
+                    return False
             
             try:
                 # Get camera settings from settings manager
@@ -89,6 +115,7 @@ class RecordingEngine:
                     'camera_id': camera_id,
                     'start_time': datetime.now(),
                     'duration': duration,
+                    'end_time': datetime.now() + datetime.timedelta(seconds=duration),  # NEW: Calculate end time
                     'use_ir': use_ir,
                     'trigger_type': trigger_type,
                     'thread': None,
@@ -127,10 +154,7 @@ class RecordingEngine:
             # Generate filename
             filename = self._generate_filename(context)
             
-            if PICAMERA2_AVAILABLE:
-                success = self._record_with_picamera2(camera_id, filename, context['duration'])
-            else:
-                success = self._record_mock_clip(filename, context)
+            success = self._record_with_picamera2(camera_id, filename, context['duration'])
             
             if success:
                 # Convert H.264 to MP4 if needed
@@ -139,8 +163,9 @@ class RecordingEngine:
                 
                 # Create thumbnail from the recorded video
                 try:
-                    from core.utils.video_thumbnail_extractor import video_thumbnail_extractor
-                    thumbnail_path = video_thumbnail_extractor.extract_thumbnail_from_video(
+                    from core.utils.video_thumbnail_extractor import VideoThumbnailExtractor
+                    thumbnail_extractor = VideoThumbnailExtractor()
+                    thumbnail_path = thumbnail_extractor.extract_thumbnail_from_video(
                         mp4_filename, 
                         context['start_time'].isoformat(), 
                         camera_id
@@ -152,6 +177,21 @@ class RecordingEngine:
                 except Exception as e:
                     logger.error(f"❌ Thumbnail creation failed: {e}")
                     thumbnail_path = None
+                
+                # NEW: Store clip metadata in database
+                try:
+                    self._save_clip_to_database(camera_id, mp4_filename, thumbnail_path, context)
+                    logger.info(f"💾 Clip metadata saved to database")
+                    
+                    # NEW: Link clip to recent motion event via sighting service
+                    try:
+                        from core.sighting_service import sighting_service
+                        sighting_service.link_clip_to_recent_motion(camera_id, mp4_filename, thumbnail_path)
+                    except Exception as link_error:
+                        logger.warning(f"⚠️ Failed to link clip to motion event: {link_error}")
+                        
+                except Exception as e:
+                    logger.error(f"❌ Database save failed: {e}")
                 
                 # Store metadata with thumbnail path
                 metadata = {
@@ -180,14 +220,16 @@ class RecordingEngine:
             with self._recording_lock:
                 if camera_id in self.active_recordings:
                     del self.active_recordings[camera_id]
+            
+            logger.info(f"🏁 Recording finished for {camera_id}")
     
     def _record_with_picamera2(self, camera_id: str, filename: str, duration: float) -> bool:
-        """Record using Picamera2"""
+        """Record using Picamera2 with proper camera state management"""
         try:
             # Check if camera manager is available
             if not self.camera_manager:
-                logger.warning(f"❌ CameraManager not available, falling back to mock")
-                return self._record_mock_clip(filename, {'camera_id': camera_id, 'duration': duration, 'trigger_type': 'mock', 'use_ir': False, 'start_time': datetime.now()})
+                logger.error(f"❌ CameraManager not available for {camera_id}")
+                return False
             
             # Get camera instance
             camera = self.camera_manager.get_camera(camera_id)
@@ -195,9 +237,16 @@ class RecordingEngine:
                 logger.error(f"❌ Camera {camera_id} not available")
                 return False
             
+            # CRITICAL FIX: Stop camera before reconfiguring
+            logger.info(f"🛑 Temporarily stopping {camera_id} for recording")
+            camera.stop()
+            
             # Configure for video recording
             video_config = camera.create_video_configuration()
             camera.configure(video_config)
+            
+            # Start camera with new configuration
+            camera.start()
             
             # Create encoder and output
             encoder = H264Encoder(bitrate=10000000)  # 10 Mbps
@@ -205,41 +254,60 @@ class RecordingEngine:
             
             # Start recording
             camera.start_recording(encoder, output)
-            logger.info(f"🎥 Recording {camera_id} to {filename} for {duration}s")
+            logger.info(f"🎥 Recording {camera_id} to {filename} (dynamic duration)")
             
-            # Record for specified duration
-            time.sleep(duration)
+            # NEW: Record until end_time (allows for dynamic extension)
+            with self._recording_lock:
+                context = self.active_recordings.get(camera_id, {})
+                end_time = context.get('end_time')
+            
+            if end_time:
+                # Check every 0.5 seconds if we should continue recording
+                while datetime.now() < end_time:
+                    time.sleep(0.5)
+                    # Re-check end_time in case it was extended
+                    with self._recording_lock:
+                        context = self.active_recordings.get(camera_id, {})
+                        end_time = context.get('end_time')
+                        if not end_time:  # Recording was cancelled
+                            break
+                            
+                actual_duration = (datetime.now() - context.get('start_time', datetime.now())).total_seconds()
+                logger.info(f"⏰ Recording completed after {actual_duration:.1f}s")
+            else:
+                # Fallback to fixed duration if no end_time set
+                time.sleep(duration)
+                logger.info(f"⏰ Recording completed after {duration}s (fixed)")
             
             # Stop recording
             camera.stop_recording()
             logger.info(f"⏹️ Stopped recording {camera_id}")
             
+            # CRITICAL FIX: Reconfigure back to streaming mode
+            logger.info(f"🔄 Reconfiguring {camera_id} back to streaming mode")
+            camera.stop()
+            
+            # Use camera manager's default configuration for streaming
+            preview_config = camera.create_preview_configuration()
+            camera.configure(preview_config)
+            camera.start()
+            logger.info(f"✅ {camera_id} restored to streaming mode")
+            
             return True
             
         except Exception as e:
             logger.error(f"❌ Picamera2 recording error: {e}")
-            return False
-    
-    def _record_mock_clip(self, filename: str, context: Dict[str, Any]) -> bool:
-        """Create a mock video file for development"""
-        try:
-            # Create a simple text file as a mock clip
-            mock_content = f"""Mock Video Clip
-Camera: {context['camera_id']}
-Start Time: {context['start_time']}
-Duration: {context['duration']}s
-Trigger: {context['trigger_type']}
-IR Used: {context['use_ir']}
-"""
-            with open(filename + ".mock", 'w') as f:
-                f.write(mock_content)
-            
-            time.sleep(min(context['duration'], 2.0))  # Simulate recording time
-            logger.info(f"🎭 Mock clip created: {filename}.mock")
-            return True
-            
-        except Exception as e:
-            logger.error(f"❌ Mock recording error: {e}")
+            # Try to restore camera to streaming mode on error
+            try:
+                camera = self.camera_manager.get_camera(camera_id)
+                if camera:
+                    camera.stop()
+                    preview_config = camera.create_preview_configuration()
+                    camera.configure(preview_config)
+                    camera.start()
+                    logger.info(f"🔄 {camera_id} restored after error")
+            except Exception as restore_error:
+                logger.error(f"❌ Failed to restore camera after error: {restore_error}")
             return False
     
     def _generate_filename(self, context: Dict[str, Any]) -> str:
@@ -249,23 +317,23 @@ IR Used: {context['use_ir']}
         trigger_short = context['trigger_type'][:3].lower()  # mot, man
         ir_suffix = "_ir" if context['use_ir'] else ""
         
+        # NEW: Create organized directory structure: clips/{camera_id}/{YYYY-MM-DD}/
         clip_settings = self._get_clip_settings()
         storage_path = Path(clip_settings.get('storage_path', './clips'))
-        storage_path.mkdir(parents=True, exist_ok=True)
+        
+        # Create camera-specific subdirectory with date
+        date_str = context['start_time'].strftime("%Y-%m-%d")
+        camera_dir = storage_path / context['camera_id'] / date_str
+        camera_dir.mkdir(parents=True, exist_ok=True)
         
         filename = f"{camera_short}_{timestamp}_{trigger_short}{ir_suffix}.h264"
-        return str(storage_path / filename)
+        return str(camera_dir / filename)
     
     def _convert_to_mp4(self, h264_filename: str) -> str:
         """Convert H.264 file to MP4 using ffmpeg"""
         mp4_filename = h264_filename.replace('.h264', '.mp4')
         
         try:
-            if h264_filename.endswith('.mock'):
-                # Just rename mock file
-                os.rename(h264_filename, mp4_filename.replace('.mp4', '.mock'))
-                return mp4_filename.replace('.mp4', '.mock')
-            
             # Use ffmpeg to convert
             cmd = [
                 'ffmpeg', '-i', h264_filename, 
@@ -297,6 +365,37 @@ IR Used: {context['use_ir']}
             logger.info(f"💾 Metadata saved: {metadata_filename}")
         except Exception as e:
             logger.error(f"❌ Failed to save metadata: {e}")
+    
+    # NEW: Database integration method
+    def _save_clip_to_database(self, camera_id: str, clip_path: str, thumbnail_path: str, context: Dict[str, Any]):
+        """Save clip metadata to the database"""
+        try:
+            db_path = '/home/p12146/NutFlix/nutflix-platform/nutflix.db'
+            conn = sqlite3.connect(db_path)
+            cursor = conn.cursor()
+            
+            # Insert into clip_metadata table
+            cursor.execute('''
+                INSERT INTO clip_metadata (timestamp, species, behavior, confidence, camera, motion_zone, clip_path)
+                VALUES (?, ?, ?, ?, ?, ?, ?)
+            ''', (
+                context['start_time'].isoformat(),
+                'Unknown',  # Will be classified later
+                'motion_detected',
+                0.95,  # High confidence for PIR-triggered clips
+                camera_id,
+                'center',  # Default motion zone
+                clip_path
+            ))
+            
+            conn.commit()
+            conn.close()
+            
+            print(f"✅ Clip metadata saved to database: {camera_id} -> {clip_path}")
+            
+        except Exception as e:
+            logger.error(f"❌ Database save error: {e}")
+            print(f"❌ Failed to save clip to database: {e}")
     
     def _get_clip_settings(self) -> Dict[str, Any]:
         """Get clip recording settings from settings manager or defaults"""

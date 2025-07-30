@@ -44,8 +44,8 @@ export function useSightings(limit = 10, camera = null) {
     } catch (err) {
       console.error('Error fetching sightings:', err);
       setError(err.message);
-      // Fallback to mock data on error
-      setSightings(getMockSightings(limit));
+      // Return empty array instead of mock data on error
+      setSightings([]);
     } finally {
       setLoading(false);
     }
@@ -171,16 +171,4 @@ function getSpeciesEmoji(species) {
   if (speciesLower.includes('unknown')) return '❓';
   
   return '🔍'; // Default for motion detection
-}
-
-function getMockSightings(limit) {
-  const mockData = [
-    { id: 1, species: "Eastern Gray Squirrel", time: "2 min ago", image: "🐿️" },
-    { id: 2, species: "Red Squirrel", time: "15 min ago", image: "🐿️" },
-    { id: 3, species: "Flying Squirrel", time: "1 hour ago", image: "🐿️" },
-    { id: 4, species: "Chipmunk", time: "2 hours ago", image: "🐿️" },
-    { id: 5, species: "Blue Jay", time: "3 hours ago", image: "🐦" }
-  ];
-  
-  return mockData.slice(0, limit);
 }

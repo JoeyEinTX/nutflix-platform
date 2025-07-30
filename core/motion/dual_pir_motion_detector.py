@@ -40,7 +40,7 @@ class DualPIRMotionDetector:
                 'last_state': False  # Track state changes for edge detection
             },
             'NestCam': {
-                'gpio_pin': 24,
+                'gpio_pin': 12,  # Changed from 24 to 12 (Pin 32) - avoiding all conflicts
                 'last_detection': 0,
                 'cooldown': 3.0,
                 'last_state': False

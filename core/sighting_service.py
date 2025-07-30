@@ -162,8 +162,15 @@ class SightingService:
         """Simple motion classification - can be enhanced with AI later"""
         motion_type = motion_data.get('type', 'unknown')
         duration = motion_data.get('duration', 0)
+        camera = motion_data.get('camera', '').lower()
         
-        # Simple heuristics for now
+        # Camera-based classification as fallback for unknown motion types
+        if 'nest' in camera:
+            return "Squirrel"  # NestCam typically sees squirrels
+        elif 'crit' in camera:
+            return "Wildlife"  # CritterCam sees various critters
+        
+        # Duration-based heuristics
         if motion_type == 'gpio':
             if duration > 5:
                 return "Human"  # Longer duration suggests human
@@ -172,6 +179,9 @@ class SightingService:
         elif motion_type == 'vision':
             # Could analyze frame data here for better classification
             return "Wildlife"
+        else:
+            # For unknown motion types, use camera-based classification
+            return "Wildlife"  # Default to wildlife for real motion events
             
     def _save_motion_thumbnail(self, camera_name: str, timestamp: str, frame) -> Optional[str]:
         """Save a thumbnail image for a motion detection event"""
@@ -241,6 +251,45 @@ class SightingService:
         conn.commit()
         conn.close()
         
+        # NEW: Check for clip that might be associated with this motion event
+        print(f"📊 Motion event recorded: {motion_data.get('camera')} at {timestamp}")
+    
+    # NEW: Method to link clips with motion events
+    def link_clip_to_recent_motion(self, camera_name: str, clip_path: str, thumbnail_path: str = None):
+        """Link a recorded clip to the most recent motion event for this camera"""
+        try:
+            conn = sqlite3.connect(self.db_path)
+            cur = conn.cursor()
+            
+            # Find the most recent clip_metadata entry for this camera without a clip_path
+            cur.execute('''
+                SELECT id, timestamp FROM clip_metadata 
+                WHERE camera = ? AND clip_path IS NULL 
+                ORDER BY created_at DESC 
+                LIMIT 1
+            ''', (camera_name,))
+            
+            result = cur.fetchone()
+            if result:
+                clip_id, timestamp = result
+                
+                # Update the record with clip and thumbnail paths
+                cur.execute('''
+                    UPDATE clip_metadata 
+                    SET clip_path = ?, thumbnail_path = ?
+                    WHERE id = ?
+                ''', (clip_path, thumbnail_path, clip_id))
+                
+                conn.commit()
+                print(f"🔗 Linked clip to motion event: {camera_name} -> {clip_path}")
+            else:
+                print(f"⚠️ No recent motion event found to link clip: {camera_name}")
+                
+            conn.close()
+            
+        except Exception as e:
+            print(f"❌ Error linking clip to motion event: {e}")
+    
     def _create_sighting(self, timestamp: str, species: str, motion_data: Dict) -> Dict:
         """Create and store a sighting record"""
         # Determine behavior based on motion data
@@ -408,7 +457,16 @@ class SightingService:
                     pass  # Leave ts_fmt as original string
             
             # Convert motion event to sighting format
-            species = "Wildlife" if row['motion_type'] == 'gpio' else "Unknown"
+            # Improved species classification - assume Wildlife for all motion events
+            # since they're coming from real PIR sensors detecting actual animals
+            camera_name = row['camera'] or 'Unknown'
+            if 'nest' in camera_name.lower():
+                species = "Squirrel"  # NestCam typically sees squirrels
+            elif 'crit' in camera_name.lower():
+                species = "Wildlife"  # CritterCam sees various wildlife
+            else:
+                species = "Wildlife"  # Default to wildlife for any real motion
+                
             behavior = "motion_detected"
             if row['duration'] and row['duration'] > 5:
                 behavior = "investigating"

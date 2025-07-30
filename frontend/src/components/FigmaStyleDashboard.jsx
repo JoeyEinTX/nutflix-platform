@@ -9,7 +9,7 @@ function FigmaStyleDashboard({ systemHealth }) {
     return () => clearInterval(timer);
   }, []);
 
-  // Mock data for multiple SquirrelBoxes
+  // Data for multiple SquirrelBoxes
   const squirrelBoxes = [
     {
       id: 1,

@@ -41,11 +41,32 @@ def system_info():
                     temperature = round(temp_raw / 1000, 1)  # Convert from millidegrees
         except:
             pass
+        # Try to get real humidity data
+        humidity = None
+        try:
+            # Try to get from environmental sensor
+            from utils.env_sensor import get_env_data
+            env_data = get_env_data()
+            if env_data and 'humidity' in env_data:
+                humidity = env_data['humidity']
+        except:
+            pass
+        
+        # Get real uptime
+        uptime_str = "Unknown"
+        try:
+            with open('/proc/uptime', 'r') as f:
+                uptime_seconds = float(f.read().split()[0])
+                uptime_hours = int(uptime_seconds // 3600)
+                uptime_minutes = int((uptime_seconds % 3600) // 60)
+                uptime_str = f"{uptime_hours}h {uptime_minutes}m"
+        except:
+            pass
             
         return jsonify({
             "status": "online",
             "temperature": temperature,
-            "humidity": 65,  # Mock humidity for now
+            "humidity": humidity,
             "storage": usage_percent,
             "disk_info": {
                 "total_gb": round(total_space / (1024**3), 1),
@@ -53,7 +74,7 @@ def system_info():
                 "free_gb": round(free_space / (1024**3), 1),
                 "usage_percent": usage_percent
             },
-            "uptime": "24h 12m",  # Mock uptime
+            "uptime": uptime_str,
             "cameras_online": 2,
             "recording_active": True
         })

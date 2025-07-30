@@ -136,15 +136,6 @@ class ClipManager:
                             clips.append(clip_info)
                     except Exception as e:
                         logger.warning(f"⚠️ Error analyzing clip {clip_file}: {e}")
-                
-                # Also check for mock clips in development
-                for clip_file in search_path.rglob('*.mock'):
-                    try:
-                        clip_info = self._analyze_clip_file(clip_file, cutoff_date)
-                        if clip_info:
-                            clips.append(clip_info)
-                    except Exception as e:
-                        logger.warning(f"⚠️ Error analyzing mock clip {clip_file}: {e}")
             
             # Sort by timestamp (newest first)
             clips.sort(key=lambda x: x.timestamp, reverse=True)
@@ -259,14 +250,6 @@ class ClipManager:
                     except:
                         continue
                 
-                # Also check mock clips
-                for clip_file in camera_dir.rglob('*.mock'):
-                    try:
-                        stat = clip_file.stat()
-                        clips.append((clip_file, datetime.fromtimestamp(stat.st_mtime), stat.st_size))
-                    except:
-                        continue
-                
                 # Sort by timestamp (oldest first for deletion)
                 clips.sort(key=lambda x: x[1])
                 
@@ -337,19 +320,6 @@ class ClipManager:
                     camera_stats[camera_id]['count'] += 1
                     camera_stats[camera_id]['size'] += stat.st_size
                     
-                except:
-                    continue
-            
-            # Also count mock files in development
-            for clip_file in self.storage_path.rglob('*.mock'):
-                try:
-                    stat = clip_file.stat()
-                    total_size += stat.st_size
-                    clip_count += 1
-                    
-                    camera_id = 'mock'
-                    camera_stats[camera_id]['count'] += 1
-                    camera_stats[camera_id]['size'] += stat.st_size
                 except:
                     continue
             

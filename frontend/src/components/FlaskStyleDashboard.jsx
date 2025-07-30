@@ -6,7 +6,7 @@ function FlaskStyleDashboard({ systemHealth }) {
   const [selectedSetting, setSelectedSetting] = useState('motion_sensitivity');
   const [settingValue, setSettingValue] = useState(75);
 
-  // Mock data in the format your Flask dashboard expects
+  // Data in the format your Flask dashboard expects
   const environmentData = {
     temperature: systemHealth.temperature,
     humidity: systemHealth.humidity,
