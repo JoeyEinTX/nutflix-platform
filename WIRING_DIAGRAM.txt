@@ -1,0 +1,76 @@
+```
+🍓 NUTFLIX PLATFORM - RASPBERRY PI 5 WIRING DIAGRAM
+═══════════════════════════════════════════════════
+
+📌 CRITICAL: Use these EXACT GPIO pins to avoid conflicts!
+
+┌─────────────────────────────────────────────────────────┐
+│                    RASPBERRY PI 5                      │
+│                                                         │
+│    3.3V  [1●] [2●]  5V      ← Power for PIR sensors    │
+│   GPIO2  [3 ] [4●]  5V      ← Power for IR LED         │
+│   GPIO3  [5 ] [6●]  GND     ← Ground reference          │
+│   GPIO4  [7 ] [8 ]  GPIO14                             │
+│     GND  [9●][10]  GPIO15                              │
+│  GPIO17 [11][12●] GPIO18    ← 🟡 CritterCam PIR        │
+│  GPIO27 [13][14●] GND       ← Additional ground        │
+│  GPIO22 [15][16●] GPIO23    ← 🔴 IR LED Controller     │
+│    3.3V [17●][18] GPIO24                               │
+│  GPIO10 [19][20●] GND                                  │
+│   GPIO9 [21][22●] GPIO25    ← 🟣 I2S Microphone SEL    │
+│  GPIO11 [23][24] GPIO8                                 │
+│     GND [25●][26] GPIO7                                │
+│   GPIO0 [27][28] GPIO1                                 │
+│   GPIO5 [29][30●] GND                                  │
+│   GPIO6 [31][32●] GPIO12    ← 🔵 NestCam PIR           │
+│  GPIO13 [33][34●] GND                                  │
+│  GPIO19 [35●][36] GPIO16    ← 🟢 I2S Microphone WS     │
+│  GPIO26 [37][38] GPIO20                                │
+│     GND [39●][40●] GPIO21   ← ⚪ I2S Microphone SD     │
+└─────────────────────────────────────────────────────────┘
+
+🔌 COMPONENT CONNECTIONS:
+
+🟡 CritterCam PIR Sensor (AM312):
+   VCC ──→ Pin 1 (3.3V) or Pin 2 (5V)
+   GND ──→ Pin 6 (GND)
+   OUT ──→ Pin 12 (GPIO 18)
+
+🔵 NestCam PIR Sensor (AM312):
+   VCC ──→ Pin 1 (3.3V) or Pin 2 (5V)  
+   GND ──→ Pin 9 (GND)
+   OUT ──→ Pin 32 (GPIO 12) ← NEW LOCATION!
+
+🔴 IR LED Controller:
+   VCC ──→ Pin 2 (5V)
+   GND ──→ Pin 6 (GND)
+   SIG ──→ Pin 16 (GPIO 23)
+
+🎤 I2S Microphone (SPH0645):
+   VDD ──→ Pin 1 (3.3V)
+   GND ──→ Pin 6 (GND)
+   BCLK──→ Pin 12 (GPIO 18) ⚠️ Shared with CritterCam PIR
+   LRCL──→ Pin 35 (GPIO 19)
+   DOUT──→ Pin 40 (GPIO 21)
+   SEL ──→ Pin 22 (GPIO 25)
+
+📱 Camera Connections:
+   CritterCam: CSI Port 0 (labeled CAM0)
+   NestCam:    CSI Port 1 (labeled CAM1)
+
+⚠️  IMPORTANT NOTES:
+• GPIO 18 is shared between CritterCam PIR and I2S BCLK - this is OK!
+• NestCam PIR moved from GPIO 24 to GPIO 12 to resolve conflicts
+• Use quality jumper wires to prevent signal noise
+• Double-check connections before powering on
+
+🧪 TESTING COMMANDS:
+gpio readall                    # Check pin states
+python3 monitor_pir_sensors.py  # Test PIR sensors
+python3 test_cameras.py         # Test cameras
+python3 dashboard/app_with_react.py  # Full system test
+
+🚀 PRODUCTION ACCESS:
+Dashboard: http://[PI_IP]:8000/app
+API:       http://[PI_IP]:8000/api/
+```
