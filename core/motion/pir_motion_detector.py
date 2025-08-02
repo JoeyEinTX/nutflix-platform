@@ -3,7 +3,13 @@ PIR Motion Detector - Hardware-based motion detection for NutFlix
 Replaces camera-based motion detection to avoid hardware conflicts
 """
 
-import RPi.GPIO as GPIO
+try:
+    from gpiozero import Button
+    GPIO_AVAILABLE = True
+except ImportError:
+    print("⚠️  gpiozero not available - PIR detector in simulation mode")
+    GPIO_AVAILABLE = False
+
 import time
 import threading
 from datetime import datetime
@@ -18,12 +24,17 @@ class PIRMotionDetector:
         self.running = False
         self.last_detection_time = 0
         self.detection_cooldown = 5.0  # Seconds between detections
+        self.pir_sensor = None
         
-        # Setup GPIO
-        GPIO.setmode(GPIO.BCM)
-        GPIO.setup(self.pir_pin, GPIO.IN)
-        
-        print(f"[PIRMotionDetector] Initialized on GPIO {self.pir_pin}")
+        # Setup GPIO using gpiozero
+        if GPIO_AVAILABLE:
+            try:
+                self.pir_sensor = Button(self.pir_pin, pull_up=False, bounce_time=0.1)
+                print(f"[PIRMotionDetector] Initialized on GPIO {self.pir_pin}")
+            except Exception as e:
+                print(f"[PIRMotionDetector] ❌ GPIO setup failed: {e}")
+        else:
+            print("[PIRMotionDetector] Running in simulation mode")
     
     def start_detection(self):
         """Start monitoring PIR sensor"""
@@ -35,7 +46,8 @@ class PIRMotionDetector:
     def stop_detection(self):
         """Stop monitoring PIR sensor"""
         self.running = False
-        GPIO.cleanup()
+        if GPIO_AVAILABLE and self.pir_sensor:
+            self.pir_sensor.close()
         print("[PIRMotionDetector] Motion detection stopped")
     
     def _monitor_pir(self):
@@ -43,7 +55,11 @@ class PIRMotionDetector:
         while self.running:
             try:
                 # Read PIR sensor state
-                if GPIO.input(self.pir_pin):
+                motion_detected = False
+                if GPIO_AVAILABLE and self.pir_sensor:
+                    motion_detected = self.pir_sensor.is_pressed
+                    
+                if motion_detected:
                     current_time = time.time()
                     
                     # Check cooldown to prevent spam
@@ -76,7 +92,11 @@ class PIRMotionDetector:
         
         start_time = time.time()
         while time.time() - start_time < duration:
-            if GPIO.input(self.pir_pin):
+            motion_detected = False
+            if GPIO_AVAILABLE and self.pir_sensor:
+                motion_detected = self.pir_sensor.is_pressed
+                
+            if motion_detected:
                 print(f"[PIRMotionDetector] ✅ Motion detected! ({time.time() - start_time:.1f}s)")
                 time.sleep(1)  # Prevent spam
             time.sleep(0.1)

@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 
-const API_BASE = 'http://10.0.0.79:8000/api';
+const API_BASE = 'http://10.0.0.82:8000/api';
 
 export function useSightings(limit = 10, camera = null) {
   const [sightings, setSightings] = useState([]);
@@ -36,7 +36,7 @@ export function useSightings(limit = 10, camera = null) {
         camera: sighting.camera,
         raw_timestamp: sighting.raw_timestamp,
         thumbnail_path: sighting.thumbnail_path,
-        thumbnail_url: sighting.thumbnail_path ? `http://10.0.0.79:8000/api/thumbnails/${sighting.thumbnail_path.split('/').pop()}` : null
+        thumbnail_url: sighting.thumbnail_path ? `http://10.0.0.82:8000/api/thumbnails/${sighting.thumbnail_path.split('/').pop()}` : null
       }));
       
       setSightings(transformedSightings);

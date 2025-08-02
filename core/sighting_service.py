@@ -24,7 +24,7 @@ except ImportError as e:
     SMART_IR_AVAILABLE = False
     smart_ir_controller = None
 
-DB_PATH = '/home/p12146/NutFlix/nutflix-platform/nutflix.db'
+DB_PATH = '/home/p12146/Projects/Nutflix-platform/nutflix.db'
 
 class SightingService:
     def __init__(self):

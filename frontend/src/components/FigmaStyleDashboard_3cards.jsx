@@ -33,7 +33,7 @@ function FigmaStyleDashboard({ systemHealth }) {
       const timestamp = Date.now(); // Add cache busting
       const promises = cameras.map(async (camera) => {
         try {
-          const response = await fetch(`http://10.0.0.79:8000/api/latest_clip/${camera}?t=${timestamp}`);
+          const response = await fetch(`http://10.0.0.82:8000/api/latest_clip/${camera}?t=${timestamp}`);
           const data = await response.json();
           return { camera, data: { ...data, loading: false } };
         } catch (error) {
@@ -160,7 +160,7 @@ function FigmaStyleDashboard({ systemHealth }) {
   useEffect(() => {
     const fetchSystemData = async () => {
       try {
-        const response = await fetch(`http://10.0.0.79:8000/api/system-info?t=${Date.now()}`);
+        const response = await fetch(`http://10.0.0.82:8000/api/system-info?t=${Date.now()}`);
         const data = await response.json();
         setRealSystemData(data);
       } catch (error) {

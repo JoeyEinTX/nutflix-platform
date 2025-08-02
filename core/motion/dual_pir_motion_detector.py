@@ -8,12 +8,12 @@ import threading
 from datetime import datetime
 from typing import Callable, Optional, Dict
 
-# Try to import GPIO, fallback for development
+# Try to import gpiozero for Pi 5 compatibility, fallback for development
 try:
-    import RPi.GPIO as GPIO
+    from gpiozero import Button
     GPIO_AVAILABLE = True
 except ImportError:
-    print("⚠️  RPi.GPIO not available - PIR detector in simulation mode")
+    print("⚠️  gpiozero not available - PIR detector in simulation mode")
     GPIO_AVAILABLE = False
 
 class DualPIRMotionDetector:
@@ -30,6 +30,7 @@ class DualPIRMotionDetector:
         self.motion_callback = motion_callback
         self.running = False
         self.detection_threads = {}
+        self.pir_sensors = {}  # Will hold gpiozero Button objects
         
         # PIR sensor configuration (optimized for AM312 sensors)
         self.sensors = {
@@ -53,12 +54,12 @@ class DualPIRMotionDetector:
             print("[DualPIRMotionDetector] Running in simulation mode")
     
     def _setup_gpio(self):
-        """Setup GPIO pins for both PIR sensors"""
+        """Setup GPIO pins for both PIR sensors using gpiozero"""
         try:
-            GPIO.setmode(GPIO.BCM)
-            
             for camera_name, config in self.sensors.items():
-                GPIO.setup(config['gpio_pin'], GPIO.IN)
+                # Create gpiozero Button object for PIR sensor (pull_up=False for AM312)
+                pir_button = Button(config['gpio_pin'], pull_up=False, bounce_time=0.1)
+                self.pir_sensors[camera_name] = pir_button
                 print(f"[DualPIRMotionDetector] ✓ {camera_name} PIR sensor on GPIO {config['gpio_pin']}")
                 
         except Exception as e:
@@ -89,7 +90,10 @@ class DualPIRMotionDetector:
         self.running = False
         
         if GPIO_AVAILABLE:
-            GPIO.cleanup()
+            # Close gpiozero Button objects
+            for pir_sensor in self.pir_sensors.values():
+                pir_sensor.close()
+            self.pir_sensors.clear()
             
         print("[DualPIRMotionDetector] Motion detection stopped")
     
@@ -106,7 +110,11 @@ class DualPIRMotionDetector:
         while self.running:
             try:
                 if GPIO_AVAILABLE:
-                    current_state = GPIO.input(gpio_pin)
+                    pir_sensor = self.pir_sensors.get(camera_name)
+                    if pir_sensor:
+                        current_state = pir_sensor.is_pressed
+                    else:
+                        current_state = False
                 else:
                     # Simulation mode - random motion every 30-60 seconds
                     import random
@@ -186,7 +194,13 @@ class DualPIRMotionDetector:
             
             # Check each sensor
             for camera_name, config in self.sensors.items():
-                if GPIO.input(config['gpio_pin']):
+                sensor_state = False
+                if GPIO_AVAILABLE:
+                    pir_sensor = self.pir_sensors.get(camera_name)
+                    if pir_sensor:
+                        sensor_state = pir_sensor.is_pressed
+                        
+                if sensor_state:
                     elapsed = current_time - start_time
                     print(f"[DualPIRMotionDetector] ✅ {camera_name} motion detected! ({elapsed:.1f}s)")
                     time.sleep(0.5)  # Prevent spam
@@ -212,7 +226,9 @@ class DualPIRMotionDetector:
             current_state = False
             if GPIO_AVAILABLE:
                 try:
-                    current_state = GPIO.input(config['gpio_pin'])
+                    pir_sensor = self.pir_sensors.get(camera_name)
+                    if pir_sensor:
+                        current_state = pir_sensor.is_pressed
                 except:
                     pass
                     
