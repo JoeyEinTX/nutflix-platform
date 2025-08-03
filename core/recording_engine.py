@@ -11,7 +11,7 @@ import os
 import time
 import threading
 import logging
-from datetime import datetime
+from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Optional, Dict, Any
 import subprocess
@@ -63,7 +63,7 @@ class RecordingEngine:
             # Update the end time to extend recording
             import datetime
             current_time = datetime.datetime.now()
-            new_end_time = current_time + datetime.timedelta(seconds=additional_duration)
+            new_end_time = current_time + timedelta(seconds=additional_duration)
             context['end_time'] = new_end_time
             logger.info(f"⏰ Extended recording for {camera_id} by {additional_duration}s (ends at {new_end_time.strftime('%H:%M:%S')})")
             return True
@@ -115,7 +115,7 @@ class RecordingEngine:
                     'camera_id': camera_id,
                     'start_time': datetime.now(),
                     'duration': duration,
-                    'end_time': datetime.now() + datetime.timedelta(seconds=duration),  # NEW: Calculate end time
+                    'end_time': datetime.now() + timedelta(seconds=duration),  # NEW: Calculate end time
                     'use_ir': use_ir,
                     'trigger_type': trigger_type,
                     'thread': None,
@@ -370,7 +370,7 @@ class RecordingEngine:
     def _save_clip_to_database(self, camera_id: str, clip_path: str, thumbnail_path: str, context: Dict[str, Any]):
         """Save clip metadata to the database"""
         try:
-            db_path = '/home/p12146/NutFlix/nutflix-platform/nutflix.db'
+            db_path = '/home/p12146/Projects/Nutflix-platform/nutflix.db'
             conn = sqlite3.connect(db_path)
             cursor = conn.cursor()
             

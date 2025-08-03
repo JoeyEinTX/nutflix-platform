@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Nutflix Motion Detection</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; }
+        .card { border: 1px solid #ccc; margin: 10px; padding: 15px; border-radius: 8px; }
+        .status { color: green; font-weight: bold; }
+        .error { color: red; }
+    </style>
+</head>
+<body>
+    <h1>Nutflix Motion Detection Dashboard</h1>
+    
+    <div class="card">
+        <h3>Camera Feed - NestCam</h3>
+        <img id="nestcam" src="http://10.0.0.82:8000/video_feed/0" width="320" height="240" />
+    </div>
+    
+    <div class="card">
+        <h3>Camera Feed - CritterCam</h3>
+        <img id="crittercam" src="http://10.0.0.82:8000/video_feed/1" width="320" height="240" />
+    </div>
+    
+    <div class="card">
+        <h3>System Status</h3>
+        <div id="status">Loading...</div>
+    </div>
+    
+    <div class="card">
+        <h3>Recent Motion Events</h3>
+        <div id="events">Loading...</div>
+    </div>
+
+    <script>
+        // Fetch system status
+        async function updateStatus() {
+            try {
+                const response = await fetch('http://10.0.0.82:8000/api/status');
+                const data = await response.json();
+                document.getElementById('status').innerHTML = '<span class="status">System Online</span><br>Backend: ' + JSON.stringify(data);
+            } catch (error) {
+                document.getElementById('status').innerHTML = '<span class="error">Backend Error: ' + error.message + '</span>';
+            }
+        }
+
+        // Update every 5 seconds
+        setInterval(updateStatus, 5000);
+        updateStatus();
+    </script>
+</body>
+</html>

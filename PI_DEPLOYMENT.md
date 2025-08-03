@@ -8,27 +8,29 @@ git clone https://github.com/JoeyEinTX/nutflix-platform.git
 cd nutflix-platform
 ```
 
-### 2. Setup Python Environment
+### 2. Install System Dependencies
+```bash
+# Install all required system packages (including emoji fonts!)
+./setup_system_deps.sh
+```
+
+### 3. Setup Python Environment
 ```bash
 python3 -m venv .venv
 source .venv/bin/activate
 pip install -r requirements.txt
 ```
 
-### 3. Setup React Frontend
+### 4. Setup React Frontend
 ```bash
-# Install Node.js if not present
-curl -fsSL https://deb.nodesource.com/setup_18.x | sudo -E bash -
-sudo apt-get install -y nodejs
-
-# Setup frontend
+# Frontend packages (Node.js already installed by setup script)
 cd frontend
 npm install
 npm run build
 cd ..
 ```
 
-### 4. Configure for Pi Hardware
+### 5. Configure for Pi Hardware
 ```bash
 # Enable camera
 sudo raspi-config
@@ -42,7 +44,7 @@ sudo raspi-config
 sudo reboot
 ```
 
-### 5. Start the Platform
+### 6. Start the Platform
 ```bash
 # Start backend (serves React app too)
 ./start_backend.sh
