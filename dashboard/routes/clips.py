@@ -139,3 +139,29 @@ def get_clip_thumbnail(clip_id):
         print(f"[clips_bp] Error getting thumbnail for {clip_id}: {e}")
     
     return jsonify({'error': f'Could not generate thumbnail for {clip_id}'}), 404
+
+@clips_bp.route('/api/thumbnails/<filename>')
+def get_thumbnail_file(filename):
+    """Serve thumbnail files directly from thumbnails directory"""
+    from flask import send_file
+    import os
+    
+    try:
+        # Get the absolute path to the project root
+        project_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+        
+        # Construct absolute path to thumbnail
+        thumbnail_path = os.path.join(project_root, 'thumbnails', filename)
+        
+        # Check if file exists
+        if os.path.exists(thumbnail_path):
+            print(f"✅ Serving thumbnail: {thumbnail_path}")
+            return send_file(thumbnail_path, mimetype='image/jpeg')
+        else:
+            print(f"⚠️ Thumbnail not found: {thumbnail_path}")
+            # Return 404 with fallback to placeholder
+            return jsonify({'error': f'Thumbnail {filename} not found'}), 404
+            
+    except Exception as e:
+        print(f"❌ Error serving thumbnail {filename}: {e}")
+        return jsonify({'error': f'Error serving thumbnail: {e}'}), 500

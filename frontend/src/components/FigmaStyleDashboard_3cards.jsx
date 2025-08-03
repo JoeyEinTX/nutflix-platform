@@ -425,7 +425,7 @@ function FigmaStyleDashboard({ systemHealth }) {
                     }}>
                       {cam.status === 'live' ? (
                         <img 
-                          src={`${cam.thumbnailUrl || `/api/stream/${getCameraStreamName(cam.id, cam.name)}/thumbnail`}?t=${Date.now()}`}
+                          src={`${cam.thumbnailUrl ? `http://10.0.0.82:8000${cam.thumbnailUrl}` : `http://10.0.0.82:8000/api/stream/${getCameraStreamName(cam.id, cam.name)}/thumbnail`}?t=${Date.now()}`}
                           alt={`${cam.name} thumbnail`}
                           style={{
                             width: '100%',
@@ -433,20 +433,29 @@ function FigmaStyleDashboard({ systemHealth }) {
                             objectFit: 'cover'
                           }}
                           onError={(e) => {
+                            console.log(`Thumbnail failed for ${cam.name}, showing fallback`);
                             e.target.style.display = 'none';
-                            e.target.nextSibling.style.display = 'block';
+                            e.target.nextSibling.style.display = 'flex';
                           }}
                         />
                       ) : null}
-                      <span 
+                      <div 
                         style={{ 
-                          fontSize: '3rem', 
+                          fontSize: '1.2rem', 
                           color: cam.status === 'live' ? '#76b900' : '#888',
-                          display: cam.status !== 'live' ? 'block' : 'none'
+                          display: cam.status !== 'live' ? 'flex' : 'none',
+                          flexDirection: 'column',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          height: '100%',
+                          textAlign: 'center'
                         }}
                       >
-                        📹
-                      </span>
+                        <div>📹</div>
+                        <div style={{ fontSize: '0.8rem', marginTop: '4px' }}>
+                          {cam.name}
+                        </div>
+                      </div>
                       
                       {/* Camera name overlay - bottom left */}
                       <div style={{
@@ -934,7 +943,7 @@ function FigmaStyleDashboard({ systemHealth }) {
                     
                     {/* Camera Feed */}
                     <img 
-                      src={`${camera.thumbnailUrl || `/api/stream/${getCameraStreamName(camera.id, camera.name)}/thumbnail`}?t=${Date.now()}`}
+                      src={`${camera.thumbnailUrl ? `http://10.0.0.82:8000${camera.thumbnailUrl}` : `http://10.0.0.82:8000/api/stream/${getCameraStreamName(camera.id, camera.name)}/thumbnail`}?t=${Date.now()}`}
                       alt={`${camera.name} ${camera.status === 'live' ? 'live feed' : 'last captured'}`}
                       style={{
                         width: '100%',

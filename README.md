@@ -11,7 +11,40 @@ This repository contains the **shared core codebase** that powers all Nutflix-ba
 
 ---
 
-## 📁 Project Structure
+## � Quick Start (Raspberry Pi)
+
+### One-Command Setup
+```bash
+# Clone and run complete setup
+git clone https://github.com/JoeyEinTX/nutflix-platform.git
+cd nutflix-platform
+./setup_complete.sh
+```
+
+### Manual Setup
+```bash
+# 1. Install system dependencies (includes emoji fonts!)
+./setup_system_deps.sh
+
+# 2. Setup Python environment
+python3 -m venv .venv
+source .venv/bin/activate
+pip install -r requirements.txt
+
+# 3. Setup frontend
+cd frontend && npm install && npm run build && cd ..
+
+# 4. Start the platform
+./start_backend.sh
+```
+
+### Access Dashboard
+- **Web Interface**: `http://[your-pi-ip]:8000/app`
+- **Backend API**: `http://[your-pi-ip]:8000/api/`
+
+---
+
+## �📁 Project Structure
 
 ```bash
 nutflix-platform/

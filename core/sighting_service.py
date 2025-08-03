@@ -419,24 +419,24 @@ class SightingService:
                 print(f"❌ Error in sighting callback: {e}")
                 
     def get_recent_sightings(self, limit: int = 10, camera: Optional[str] = None) -> list:
-        """Get recent sightings from database, reading from motion_events table"""
+        """Get recent sightings from database, reading from clip_metadata table"""
         conn = sqlite3.connect(self.db_path)
         conn.row_factory = sqlite3.Row
         cur = conn.cursor()
         
-        # FIX: Read from motion_events instead of clip_metadata
+        # Read from clip_metadata to get thumbnail and clip paths
         if camera:
             cur.execute('''
-                SELECT timestamp, camera, motion_type, confidence, duration, created_at
-                FROM motion_events
+                SELECT timestamp, camera, species, behavior, confidence, clip_path, thumbnail_path, created_at
+                FROM clip_metadata
                 WHERE camera = ?
                 ORDER BY created_at DESC
                 LIMIT ?
             ''', (camera, limit))
         else:
             cur.execute('''
-                SELECT timestamp, camera, motion_type, confidence, duration, created_at
-                FROM motion_events
+                SELECT timestamp, camera, species, behavior, confidence, clip_path, thumbnail_path, created_at
+                FROM clip_metadata
                 ORDER BY created_at DESC
                 LIMIT ?
             ''', (limit,))
@@ -456,33 +456,24 @@ class SightingService:
                 except Exception:
                     pass  # Leave ts_fmt as original string
             
-            # Convert motion event to sighting format
-            # Improved species classification - assume Wildlife for all motion events
-            # since they're coming from real PIR sensors detecting actual animals
+            # Use data from clip_metadata table
+            species = row['species'] or "Wildlife"
+            behavior = row['behavior'] or "passing"
             camera_name = row['camera'] or 'Unknown'
-            if 'nest' in camera_name.lower():
-                species = "Squirrel"  # NestCam typically sees squirrels
-            elif 'crit' in camera_name.lower():
-                species = "Wildlife"  # CritterCam sees various wildlife
-            else:
-                species = "Wildlife"  # Default to wildlife for any real motion
-                
-            behavior = "motion_detected"
-            if row['duration'] and row['duration'] > 5:
-                behavior = "investigating"
-            elif row['duration'] and row['duration'] > 2:
-                behavior = "foraging"
-            else:
-                behavior = "passing"
+            
+            # Improve species classification if not set
+            if species == "Wildlife":
+                if 'nest' in camera_name.lower():
+                    species = "Squirrel"  # NestCam typically sees squirrels
                 
             results.append({
                 'species': species,
                 'behavior': behavior,
-                'confidence': row['confidence'] or 0.8,
+                'confidence': row['confidence'] or 0.95,
                 'camera': row['camera'],
                 'motion_zone': 'detected',
-                'clip_path': None,  # No clip path from motion events
-                'thumbnail_path': None,  # No thumbnail from motion events
+                'clip_path': row['clip_path'],
+                'thumbnail_path': row['thumbnail_path'],
                 'timestamp': ts_fmt,
                 'raw_timestamp': ts
             })

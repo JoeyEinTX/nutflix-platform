@@ -89,7 +89,7 @@ def pir_motion_callback(camera_name: str, motion_event: dict):
         
         # NEW: Smart clip recording logic - only on motion START
         motion_type = motion_event.get('motion_type', 'unknown')
-        if RECORDING_ENGINE_AVAILABLE and recording_engine and motion_type == 'MOTION_START':
+        if RECORDING_ENGINE_AVAILABLE and recording_engine and motion_type == 'motion_start':
             try:
                 print(f"🎬 PIR Motion START - Starting/extending clip recording for {camera_name}")
                 success = recording_engine.start_recording(
@@ -103,7 +103,7 @@ def pir_motion_callback(camera_name: str, motion_event: dict):
                     print(f"❌ Failed to start recording for {camera_name}")
             except Exception as recording_error:
                 print(f"❌ Recording error for {camera_name}: {recording_error}")
-        elif RECORDING_ENGINE_AVAILABLE and motion_type == 'MOTION_END':
+        elif RECORDING_ENGINE_AVAILABLE and motion_type == 'motion_end':
             print(f"🏁 PIR Motion END - {camera_name} recording will continue for 10s timeout")
         else:
             if not RECORDING_ENGINE_AVAILABLE:
@@ -119,8 +119,13 @@ def pir_motion_callback(camera_name: str, motion_event: dict):
 # Configure CORS for React frontend
 CORS(app, origins=[
     "http://localhost:3000",  # React dev server
+    "http://localhost:3001",  # React dev server fallback port
     "http://127.0.0.1:3000",
-    "http://10.0.0.79:3000",  # Network access
+    "http://127.0.0.1:3001",
+    "http://10.0.0.79:3000",  # Network access (old Pi IP)
+    "http://10.0.0.79:3001",
+    "http://10.0.0.82:3000",  # Current Pi IP
+    "http://10.0.0.82:3001",  # Current Pi IP fallback port
     "https://*.githubpreview.dev",  # Codespaces preview URLs
     "https://*.app.github.dev"  # Alternative codespace URLs
 ])
@@ -303,7 +308,7 @@ def api_trigger_test_sighting():
         import random
         
         # Connect to database
-        conn = sqlite3.connect('/home/p12146/NutFlix/nutflix-platform/nutflix.db')
+        conn = sqlite3.connect('/home/p12146/Projects/Nutflix-platform/nutflix.db')
         cur = conn.cursor()
         
         # Create a realistic sighting
@@ -478,7 +483,7 @@ def get_clip_thumbnail(camera_id):
             backend_camera_name = camera_map.get(camera_id.lower(), camera_id)
             
             # Query for latest clip with thumbnail for this camera
-            conn = sqlite3.connect('/home/p12146/NutFlix/nutflix-platform/nutflix.db')
+            conn = sqlite3.connect('/home/p12146/Projects/Nutflix-platform/nutflix.db')
             cur = conn.cursor()
             
             cur.execute('''
