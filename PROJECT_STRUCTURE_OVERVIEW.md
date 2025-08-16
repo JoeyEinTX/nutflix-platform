@@ -61,7 +61,7 @@ nutflix-platform/
 │   │   │
 │   │   ├── motion/                      # Motion Detection
 │   │   │   ├── __init__.py
-│   │   │   └── motion_detector.py       # OpenCV motion detection
+│   │   │   └── motion_detector.py       # PIR motion detection only
 │   │   │
 │   │   ├── storage/                     # File Management
 │   │   │   ├── __init__.py

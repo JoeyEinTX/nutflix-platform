@@ -36,7 +36,8 @@ export function useSightings(limit = 10, camera = null) {
         camera: sighting.camera,
         raw_timestamp: sighting.raw_timestamp,
         thumbnail_path: sighting.thumbnail_path,
-        thumbnail_url: sighting.thumbnail_path ? `http://10.0.0.82:8000/api/thumbnails/${sighting.thumbnail_path.split('/').pop()}` : null
+        clip_path: sighting.clip_path,
+        thumbnail_url: sighting.clip_path ? `http://10.0.0.82:8000/api/clip/thumbnail?path=${encodeURIComponent(sighting.clip_path)}&t=${Date.now()}` : null
       }));
       
       setSightings(transformedSightings);

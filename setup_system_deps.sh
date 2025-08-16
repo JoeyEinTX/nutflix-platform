@@ -33,8 +33,7 @@ echo "📹 Installing camera and multimedia packages..."
 sudo apt install -y \
     libcamera-apps \
     libcamera-dev \
-    libopencv-dev \
-    python3-opencv
+    python3-numpy \
 
 # Audio packages
 echo "🔊 Installing audio packages..."

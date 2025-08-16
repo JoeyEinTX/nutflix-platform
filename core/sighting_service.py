@@ -9,8 +9,7 @@ from typing import Dict, Optional
 import json
 import os
 
-# Core imports
-from core.motion.motion_detector import MotionDetector
+# Core imports - motion detection now handled by PIR sensors
 from core.camera.camera_manager import CameraManager
 from core.storage.file_manager import FileManager
 
@@ -34,10 +33,7 @@ class SightingService:
         self.recent_sightings = []  # In-memory cache for quick access
         self.sighting_callbacks = []  # For real-time updates
         
-        # DEPRECATED: Motion detectors disabled - now using PIR sensors
-        # Camera-based motion detection replaced with PIR hardware sensors
-        self.motion_detectors = {}  # Empty - no camera motion detection
-        self.motion_threads = {}
+        # PIR sensors handle all motion detection - no camera monitoring needed
         
         # Initialize database
         self._init_database()
@@ -69,7 +65,7 @@ class SightingService:
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 timestamp TEXT NOT NULL,
                 camera TEXT,
-                motion_type TEXT,  -- 'gpio' or 'vision'
+                motion_type TEXT  -- 'gpio' only (PIR sensors)
                 confidence REAL,
                 duration REAL,
                 created_at DATETIME DEFAULT CURRENT_TIMESTAMP
@@ -86,32 +82,21 @@ class SightingService:
             
         self.running = True
         
-        print("✅ Sighting service started - PIR motion detection mode (no camera conflicts)")
-        print("📡 Camera motion detection DISABLED - using PIR sensors instead")
+        # PIR sensors handle all motion detection
+        print("✅ Sighting service started - PIR motion detection only")
             
     def connect_camera_manager(self, camera_manager):
         """Connect an existing camera manager to avoid camera conflicts"""
         self.camera_manager = camera_manager
         
-        # Get available cameras
+        # PIR sensors handle motion detection - no camera monitoring
         available_cameras = self.camera_manager.get_available_cameras()
         print(f"📹 Connected to cameras: {available_cameras}")
+        print("📡 Motion detection: PIR sensors only")
         
-        # NO MOTION DETECTION INITIALIZATION - PIR sensors handle motion
-        print("🚨 PIR motion detection active - camera motion detection disabled!")
-        
-    def check_motion_in_frame(self, camera_name: str, frame):
-        """DEPRECATED: Camera motion detection disabled - PIR sensors used instead"""
-        # Always return False - no camera-based motion detection
-        return False
-            
     def stop_detection(self):
         """Stop the motion detection system"""
         self.running = False
-        
-        # Stop all camera monitoring threads
-        for camera_name in list(self.motion_threads.keys()):
-            self.motion_threads[camera_name] = False  # Signal thread to stop
             
         print("🛑 Sighting service stopped")
         
@@ -122,42 +107,6 @@ class SightingService:
         
         def monitor_camera():
             detector = self.motion_detectors[camera_name]
-            self.motion_threads[camera_name] = True
-            
-            print(f"🎥 Starting motion monitoring for {camera_name}")
-            
-            while self.running and self.motion_threads.get(camera_name, False):
-                try:
-                    # Get current frame from camera
-                    frame = self.camera_manager.get_frame(camera_name)
-                    
-                    # Check for motion
-                    motion_detected = detector.detect_motion(frame)
-                    
-                    if motion_detected:
-                        # Create motion event
-                        timestamp = datetime.now().isoformat()
-                        self._on_vision_motion_detected(camera_name, timestamp, detector)
-                        
-                    # Small delay to avoid overwhelming the system
-                    time.sleep(0.5)  # Check for motion every 0.5 seconds
-                    
-                except Exception as e:
-                    print(f"❌ Error monitoring {camera_name}: {e}")
-                    time.sleep(1)  # Wait longer on error
-                    
-            print(f"🛑 Motion monitoring stopped for {camera_name}")
-        
-        # Start monitoring thread
-        thread = threading.Thread(target=monitor_camera, daemon=True)
-        thread.start()
-        
-    def _on_vision_motion_detected(self, camera_name: str, timestamp: str, detector):
-        """DEPRECATED: Vision-based motion detection disabled - PIR sensors used instead"""
-        # This function is no longer called since camera motion detection is disabled
-        print(f"[SightingService] ⚠️ Vision motion detection called but DISABLED - using PIR sensors")
-        return
-            
     def _classify_motion(self, motion_data: Dict) -> str:
         """Simple motion classification - can be enhanced with AI later"""
         motion_type = motion_data.get('type', 'unknown')
@@ -170,15 +119,12 @@ class SightingService:
         elif 'crit' in camera:
             return "Wildlife"  # CritterCam sees various critters
         
-        # Duration-based heuristics
+        # Duration-based heuristics for PIR sensors
         if motion_type == 'gpio':
             if duration > 5:
                 return "Human"  # Longer duration suggests human
             else:
                 return "Squirrel"  # Quick movement
-        elif motion_type == 'vision':
-            # Could analyze frame data here for better classification
-            return "Wildlife"
         else:
             # For unknown motion types, use camera-based classification
             return "Wildlife"  # Default to wildlife for real motion events
@@ -344,7 +290,7 @@ class SightingService:
         }
         
     def _determine_behavior(self, motion_data: Dict) -> str:
-        """Determine behavior from motion characteristics"""
+        """Determine behavior from PIR motion characteristics"""
         motion_type = motion_data.get('type', 'unknown')
         duration = motion_data.get('duration', 0)
         
@@ -359,7 +305,7 @@ class SightingService:
             return "active"
             
     def create_sighting_from_recording(self, camera_name: str, recording_metadata: Dict) -> Dict:
-        """Create a sighting record from a completed video recording"""
+        """Create a sighting record from a PIR-triggered video recording"""
         try:
             # Extract information from recording metadata
             timestamp = recording_metadata.get('start_time', datetime.now().isoformat())
@@ -368,11 +314,11 @@ class SightingService:
             thumbnail_path = recording_metadata.get('thumbnail_path', None)
             trigger_type = recording_metadata.get('trigger_type', 'motion')
             
-            # Create motion data for the recording
+            # Create motion data for the PIR-triggered recording
             motion_data = {
                 'camera': camera_name,
-                'type': 'vision',  # Camera-based motion detection
-                'confidence': 0.85,  # High confidence for recorded clips
+                'type': 'gpio',  # PIR-triggered recording
+                'confidence': 0.95,  # High confidence for PIR-triggered clips
                 'duration': duration,
                 'zone': 'center',
                 'last_motion_time': timestamp,
@@ -397,7 +343,7 @@ class SightingService:
             # Notify callbacks (for real-time updates)
             self._notify_sighting_callbacks(sighting)
             
-            print(f"🎬 Recording processed! New sighting: {species} on {camera_name} from clip {filename}")
+            print(f"🎬 PIR-triggered recording processed! New sighting: {species} on {camera_name} from clip {filename}")
             
             return sighting
             

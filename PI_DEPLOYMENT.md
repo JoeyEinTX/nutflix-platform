@@ -117,7 +117,7 @@ nutflix-platform/
 
 ## Performance Notes
 - **tflite-runtime** instead of tensorflow (10x faster on Pi)
-- **Lightweight OpenCV** for better performance
+- **OpenCV for thumbnails** - image processing for thumbnails only
 - **React build** served by Flask (single port)
 - **Systemd service** for reliability
 

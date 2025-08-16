@@ -15,7 +15,7 @@
 ## Implementation Plan:
 1. Wire PIR sensor to GPIO 18
 2. Create PIRMotionDetector class
-3. Replace VisionMotionDetector in sighting_service.py
+3. ✅ **COMPLETED** - Removed VisionMotionDetector from sighting_service.py
 4. Test motion triggering → recording flow
 
 ## Hardware Needed:

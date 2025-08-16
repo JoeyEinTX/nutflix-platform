@@ -109,10 +109,11 @@ function FigmaStyleDashboard({ systemHealth }) {
     }
     if (!data.has_clip) {
       return {
+        id: cameraId,
         name: title,
         location: cameraId.includes('1') || cameraId.includes('3') || cameraId.includes('5') ? 'Interior' : 'Exterior', 
-        status: 'offline',
-        thumbnailUrl: data.thumbnail_url,
+        status: 'no_clips',
+        thumbnailUrl: null,
         lastSeen: data.message || 'No sightings yet',
         hasClip: false,
         error: null
@@ -132,18 +133,21 @@ function FigmaStyleDashboard({ systemHealth }) {
       const hours = Math.floor(data.last_seen_minutes / 60);
       lastSeenText = hours === 1 ? '1 hour ago' : `${hours} hours ago`;
     }
-    return {
+    const result = {
       id: cameraId,  // Add camera ID
       name: title,
       location: cameraId.includes('1') || cameraId.includes('3') || cameraId.includes('5') ? 'Interior' : 'Exterior',
-      status: 'live',
-      thumbnailUrl: data.thumbnail_url,
+      status: 'has_clip', // Show recorded clip thumbnail, NOT live feed
+      thumbnailUrl: data.clip_path, // Use clip path for thumbnail generation
       lastSeen: lastSeenText,
       hasClip: true,
       triggerType: data.trigger_type,
       timestamp: data.timestamp,
+      clipPath: data.clip_path,
       error: null
     };
+    console.log(`[${title}] formatCameraForDisplay result:`, result);
+    return result;
   };
 
   // Use real sightings data - separate hooks for each camera
@@ -173,10 +177,10 @@ function FigmaStyleDashboard({ systemHealth }) {
     return () => clearInterval(interval);
   }, []);
 
-  // Fetch camera data on mount and periodically (every 60 seconds)
+  // Fetch camera data on mount and periodically (every 2 minutes to avoid interfering with recording)
   useEffect(() => {
     fetchCameraData();
-    const interval = setInterval(fetchCameraData, 60000); // 60 seconds
+    const interval = setInterval(fetchCameraData, 120000); // 120 seconds (2 minutes)
     return () => clearInterval(interval);
   }, []);
 
@@ -288,6 +292,17 @@ function FigmaStyleDashboard({ systemHealth }) {
       {/* Modal */}
       {modalOpen && (
         <Modal open={modalOpen} onClose={() => setModalOpen(false)}>
+          <div style={{ 
+            background: 'linear-gradient(135deg, #0f1419 0%, #1a2332 100%)', 
+            padding: '1.5rem', 
+            borderRadius: '12px', 
+            maxWidth: '90vw',
+            maxHeight: '90vh',
+            overflow: 'auto',
+            border: '2px solid rgba(76, 175, 80, 0.3)',
+            boxShadow: '0 20px 60px rgba(0,0,0,0.5)'
+          }}>
+            
           {modalType === 'header' && modalData && (
             <div style={{ width: '100%', maxWidth: '480px' }}>
               {/* Header with SB name, sensor data, and close button */}
@@ -405,7 +420,7 @@ function FigmaStyleDashboard({ systemHealth }) {
                 {modalData.cameras.map((cam, idx) => (
                   <div key={idx} style={{ 
                     borderRadius: '10px', 
-                    border: `2px solid ${cam.status === 'live' ? '#76b900' : '#666'}`,
+                    border: `2px solid ${(cam.status === 'live' || cam.status === 'recorded') ? '#76b900' : '#666'}`,
                     cursor: 'pointer',
                     transition: 'all 0.3s ease',
                     flex: '1',
@@ -416,16 +431,19 @@ function FigmaStyleDashboard({ systemHealth }) {
                     <div style={{
                       width: '100%',
                       height: '150px',
-                      background: cam.status === 'live' ? 'radial-gradient(circle, rgba(76,175,80,0.15), transparent)' : 'rgba(60,60,60,0.5)',
+                      background: (cam.status === 'live' || cam.status === 'recorded') ? 'radial-gradient(circle, rgba(76,175,80,0.15), transparent)' : 'rgba(60,60,60,0.5)',
                       display: 'flex',
                       alignItems: 'center',
                       justifyContent: 'center',
                       overflow: 'hidden',
                       position: 'relative'
                     }}>
-                      {cam.status === 'live' ? (
+                      {(cam.status === 'live' || cam.status === 'recorded') ? (
                         <img 
-                          src={`${cam.thumbnailUrl ? `http://10.0.0.82:8000${cam.thumbnailUrl}` : `http://10.0.0.82:8000/api/stream/${getCameraStreamName(cam.id, cam.name)}/thumbnail`}?t=${Date.now()}`}
+                          src={cam.status === 'recorded' && cam.thumbnailUrl ? 
+                            `http://10.0.0.82:8000${cam.thumbnailUrl}` : 
+                            `http://10.0.0.82:8000/api/stream/${getCameraStreamName(cam.id, cam.name)}/thumbnail?t=${Date.now()}`
+                          }
                           alt={`${cam.name} thumbnail`}
                           style={{
                             width: '100%',
@@ -433,7 +451,8 @@ function FigmaStyleDashboard({ systemHealth }) {
                             objectFit: 'cover'
                           }}
                           onError={(e) => {
-                            console.log(`Thumbnail failed for ${cam.name}, showing fallback`);
+                            console.log(`[${cam.name}] Image failed: ${e.target.src}`);
+                            console.log(`[${cam.name}] Status: ${cam.status}, Has thumbnailUrl: ${!!cam.thumbnailUrl}`);
                             e.target.style.display = 'none';
                             e.target.nextSibling.style.display = 'flex';
                           }}
@@ -442,8 +461,8 @@ function FigmaStyleDashboard({ systemHealth }) {
                       <div 
                         style={{ 
                           fontSize: '1.2rem', 
-                          color: cam.status === 'live' ? '#76b900' : '#888',
-                          display: cam.status !== 'live' ? 'flex' : 'none',
+                          color: (cam.status === 'live' || cam.status === 'recorded') ? '#76b900' : '#888',
+                          display: (cam.status !== 'live' && cam.status !== 'recorded') ? 'flex' : 'none',
                           flexDirection: 'column',
                           alignItems: 'center',
                           justifyContent: 'center',
@@ -518,16 +537,20 @@ function FigmaStyleDashboard({ systemHealth }) {
                         minWidth: '80px',
                         boxShadow: '0 3px 8px rgba(0,0,0,0.3)'
                       }}>
-                        {/* Thumbnail image or fallback emoji */}
-                        {sighting.thumbnail_url ? (
-                          <div style={{
-                            width: '60px',
-                            height: '45px',
-                            borderRadius: '4px',
-                            overflow: 'hidden',
-                            border: '1px solid rgba(76, 175, 80, 0.3)',
-                            margin: '0 auto 0.2rem auto'
-                          }}>
+                        {/* Larger thumbnail with camera icon fallback */}
+                        <div style={{
+                          width: '80px',
+                          height: '60px',
+                          borderRadius: '6px',
+                          overflow: 'hidden',
+                          border: '1px solid rgba(76, 175, 80, 0.3)',
+                          margin: '0 auto 0.3rem auto',
+                          background: 'rgba(40, 40, 40, 0.8)',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center'
+                        }}>
+                          {sighting.thumbnail_url ? (
                             <img 
                               src={sighting.thumbnail_url}
                               alt={`${sighting.species} sighting`}
@@ -537,21 +560,22 @@ function FigmaStyleDashboard({ systemHealth }) {
                                 objectFit: 'cover'
                               }}
                               onError={(e) => {
-                                // Fallback to emoji if image fails to load
+                                // Show camera icon if thumbnail fails
                                 e.target.style.display = 'none';
-                                e.target.nextSibling.style.display = 'block';
+                                e.target.nextSibling.style.display = 'flex';
                               }}
                             />
-                            <div style={{ 
-                              fontSize: '1.5rem', 
-                              marginBottom: '0.2rem',
-                              display: 'none',
-                              paddingTop: '10px'
-                            }}>{sighting.image}</div>
-                          </div>
-                        ) : (
-                          <div style={{ fontSize: '1.5rem', marginBottom: '0.2rem' }}>{sighting.image}</div>
-                        )}
+                          ) : null}
+                          <div style={{ 
+                            fontSize: '1.8rem',
+                            color: '#666',
+                            display: sighting.thumbnail_url ? 'none' : 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            width: '100%',
+                            height: '100%'
+                          }}>📷</div>
+                        </div>
                         <div style={{ 
                           fontSize: '0.8rem', 
                           fontWeight: 600, 
@@ -674,16 +698,20 @@ function FigmaStyleDashboard({ systemHealth }) {
                       }}
                       onClick={() => setSelectedSighting(s)}
                     >
-                      {/* Thumbnail image or fallback emoji */}
-                      {s.thumbnail_url ? (
-                        <div style={{
-                          width: '70px',
-                          height: '52px',
-                          borderRadius: '4px',
-                          overflow: 'hidden',
-                          border: '1px solid rgba(76, 175, 80, 0.3)',
-                          margin: '0 auto 0.5rem auto'
-                        }}>
+                      {/* Larger thumbnail with camera icon fallback */}
+                      <div style={{
+                        width: '90px',
+                        height: '68px',
+                        borderRadius: '6px',
+                        overflow: 'hidden',
+                        border: '1px solid rgba(76, 175, 80, 0.3)',
+                        margin: '0 auto 0.5rem auto',
+                        background: 'rgba(40, 40, 40, 0.8)',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center'
+                      }}>
+                        {s.thumbnail_url ? (
                           <img 
                             src={s.thumbnail_url}
                             alt={`${s.species} sighting`}
@@ -693,20 +721,22 @@ function FigmaStyleDashboard({ systemHealth }) {
                               objectFit: 'cover'
                             }}
                             onError={(e) => {
-                              // Fallback to emoji if image fails to load
+                              // Show camera icon if thumbnail fails
                               e.target.style.display = 'none';
-                              e.target.nextSibling.style.display = 'block';
+                              e.target.nextSibling.style.display = 'flex';
                             }}
                           />
-                          <div style={{ 
-                            fontSize: '2rem',
-                            display: 'none',
-                            paddingTop: '10px'
-                          }}>{s.image}</div>
-                        </div>
-                      ) : (
-                        <div style={{ fontSize: '2rem' }}>{s.image}</div>
-                      )}
+                        ) : null}
+                        <div style={{ 
+                          fontSize: '2rem',
+                          color: '#666',
+                          display: s.thumbnail_url ? 'none' : 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          width: '100%',
+                          height: '100%'
+                        }}>📷</div>
+                      </div>
                       <div style={{ color: '#e0e0e0', fontWeight: 700, fontSize: '0.95rem' }}>{s.species}</div>
                       <div style={{ color: '#8fbc8f', fontSize: '0.8rem' }}>{s.time}</div>
                       {s.camera && (
@@ -719,59 +749,195 @@ function FigmaStyleDashboard({ systemHealth }) {
             </div>
           )}
           {modalType === 'sighting' && modalData && (
-            <div>
-              <h2 style={{ color: '#76b900', marginBottom: '1rem' }}>Sighting: {modalData.species}</h2>
+            <div style={{ color: '#e0e0e0' }}>
+              <h2 style={{ color: '#76b900', marginBottom: '1rem' }}>
+                {modalData.species} - {modalData.camera}
+              </h2>
               
-              {/* Full-size thumbnail or fallback emoji */}
-              {modalData.thumbnail_url ? (
-                <div style={{
-                  width: '100%',
-                  maxWidth: '400px',
-                  height: '300px',
-                  borderRadius: '8px',
-                  overflow: 'hidden',
-                  border: '2px solid rgba(76, 175, 80, 0.3)',
-                  margin: '1rem auto',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center'
-                }}>
-                  <img 
-                    src={modalData.thumbnail_url}
-                    alt={`${modalData.species} sighting`}
+              {/* Temporary Debug Info */}
+              <div style={{ 
+                background: 'rgba(255, 255, 255, 0.1)', 
+                padding: '0.5rem', 
+                marginBottom: '1rem', 
+                borderRadius: '4px',
+                fontSize: '0.8rem',
+                fontFamily: 'monospace'
+              }}>
+                <strong>Debug:</strong> clip_path = "{modalData.clip_path}"<br/>
+                <strong>Video URL:</strong> {modalData.clip_path ? `http://10.0.0.82:8000/api/clips${modalData.clip_path}` : 'No clip_path'}<br/>
+                <strong>Has clip_path:</strong> {modalData.clip_path ? 'Yes' : 'No'}<br/>
+                <strong>Modal Data Keys:</strong> {Object.keys(modalData).join(', ')}<br/>
+                <strong>Auto H.264:</strong> <a href={modalData.clip_path ? `http://10.0.0.82:8000/api/clips${modalData.clip_path}` : '#'} target="_blank" style={{color: '#76b900'}}>Smart Endpoint (Prefers H.264)</a>
+              </div>
+              
+              {/* Video Player */}
+              <div style={{
+                width: '100%',
+                maxWidth: '640px',
+                margin: '1rem auto',
+                borderRadius: '8px',
+                overflow: 'hidden',
+                border: '2px solid rgba(76, 175, 80, 0.3)',
+                background: 'rgba(40, 40, 40, 0.8)'
+              }}>
+                {modalData.clip_path ? (
+                  <video 
+                    key={modalData.clip_path} // Force reload when clip changes
+                    controls
+                    autoPlay
+                    preload="metadata"
                     style={{
                       width: '100%',
-                      height: '100%',
-                      objectFit: 'cover'
+                      height: 'auto',
+                      display: 'block',
+                      backgroundColor: 'rgba(0,0,0,0.8)'
                     }}
                     onError={(e) => {
-                      // Fallback to emoji if image fails to load
-                      e.target.style.display = 'none';
-                      e.target.nextSibling.style.display = 'block';
+                      console.error('❌ Video failed to load:', modalData.clip_path);
+                      const videoUrl = `http://10.0.0.82:8000/api/clips${modalData.clip_path}`;
+                      console.error('❌ Full URL:', videoUrl);
+                      console.error('❌ Video error event:', e);
+                      console.error('❌ Video error details:', e.target.error);
+                      if (e.target.error) {
+                        console.error('❌ Error code:', e.target.error.code);
+                        console.error('❌ Error message:', e.target.error.message);
+                      }
                     }}
-                  />
-                  <div style={{ 
-                    fontSize: '3rem', 
-                    display: 'none'
-                  }}>{modalData.image}</div>
+                    onLoadStart={() => {
+                      const videoUrl = `http://10.0.0.82:8000/api/clips${modalData.clip_path}`;
+                      console.log('🎬 Loading video:', videoUrl);
+                    }}
+                    onLoadedMetadata={() => {
+                      console.log('📊 Video metadata loaded!');
+                    }}
+                    onLoadedData={() => {
+                      console.log('✅ Video data loaded successfully!');
+                    }}
+                    onCanPlay={() => {
+                      console.log('▶️ Video can start playing!');
+                    }}
+                    onPlay={() => {
+                      console.log('🎵 Video started playing!');
+                    }}
+                    onStalled={() => {
+                      console.log('⏸️ Video stalled!');
+                    }}
+                    onWaiting={() => {
+                      console.log('⏳ Video waiting for data...');
+                    }}
+                  >
+                    <source 
+                      src={`http://10.0.0.82:8000/api/clips${modalData.clip_path}`}
+                      type="video/mp4" 
+                    />
+                    Your browser does not support the video tag.
+                  </video>
+                ) : (
+                  <div style={{
+                    height: '400px',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    color: '#666',
+                    fontSize: '1.2rem'
+                  }}>
+                    📹 No video available
+                  </div>
+                )}
+              </div>
+
+              {/* Sighting Details */}
+              <div style={{
+                background: 'rgba(76, 175, 80, 0.1)',
+                borderRadius: '8px',
+                padding: '1rem',
+                margin: '1rem 0',
+                display: 'grid',
+                gridTemplateColumns: '1fr 1fr',
+                gap: '1rem'
+              }}>
+                <div>
+                  <strong style={{ color: '#8fbc8f' }}>Time:</strong> {modalData.time}
                 </div>
-              ) : (
-                <div style={{ fontSize: '3rem', margin: '1rem 0', textAlign: 'center' }}>{modalData.image}</div>
-              )}
-              
-              <p><strong>Time:</strong> {modalData.time}</p>
-              <p><strong>Species:</strong> {modalData.species}</p>
-              {modalData.camera && (
-                <p><strong>Camera:</strong> 📹 {modalData.camera}</p>
-              )}
-              {modalData.behavior && (
-                <p><strong>Behavior:</strong> {modalData.behavior}</p>
-              )}
-              {modalData.confidence && (
-                <p><strong>Confidence:</strong> {Math.round(modalData.confidence * 100)}%</p>
-              )}
+                <div>
+                  <strong style={{ color: '#8fbc8f' }}>Confidence:</strong> {modalData.confidence || 'N/A'}
+                </div>
+                <div>
+                  <strong style={{ color: '#8fbc8f' }}>Behavior:</strong> {modalData.behavior || 'N/A'}
+                </div>
+                <div>
+                  <strong style={{ color: '#8fbc8f' }}>Camera:</strong> {modalData.camera}
+                </div>
+              </div>
+
+              {/* Camera Sightings Carousel */}
+              <div style={{ marginTop: '2rem' }}>
+                <h3 style={{ color: '#8fbc8f', marginBottom: '1rem' }}>
+                  Other {modalData.camera} Sightings
+                </h3>
+                <div style={{
+                  display: 'flex',
+                  gap: '0.75rem',
+                  overflowX: 'auto',
+                  padding: '0.5rem 0',
+                  maxHeight: '120px'
+                }}>
+                  {allSightings
+                    .filter(s => s.camera === modalData.camera && s.clip_path !== modalData.clip_path)
+                    .slice(0, 10)
+                    .map((sighting, sightingIdx) => (
+                    <div
+                      key={`carousel-${sightingIdx}`}
+                      style={{
+                        minWidth: '80px',
+                        height: '60px',
+                        borderRadius: '6px',
+                        overflow: 'hidden',
+                        border: '2px solid rgba(76, 175, 80, 0.3)',
+                        cursor: 'pointer',
+                        background: 'rgba(40, 40, 40, 0.8)',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        transition: 'all 0.2s ease'
+                      }}
+                      onClick={() => {
+                        setModalData({...sighting, id: `carousel-${sightingIdx}`, time: sighting.timestamp});
+                      }}
+                      onMouseEnter={(e) => {
+                        e.target.style.borderColor = '#76b900';
+                        e.target.style.transform = 'scale(1.05)';
+                      }}
+                      onMouseLeave={(e) => {
+                        e.target.style.borderColor = 'rgba(76, 175, 80, 0.3)';
+                        e.target.style.transform = 'scale(1)';
+                      }}
+                    >
+                      {sighting.thumbnail_url ? (
+                        <img 
+                          src={sighting.thumbnail_url}
+                          alt={`${sighting.species} sighting`}
+                          style={{
+                            width: '100%',
+                            height: '100%',
+                            objectFit: 'cover'
+                          }}
+                        />
+                      ) : (
+                        <div style={{ 
+                          fontSize: '1.5rem', 
+                          color: '#666'
+                        }}>
+                          📷
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </div>
             </div>
           )}
+          </div>
         </Modal>
       )}
       {/* Header */}
@@ -895,10 +1061,10 @@ function FigmaStyleDashboard({ systemHealth }) {
                     key={cameraIndex}
                     style={{
                       borderRadius: '8px',
-                      background: camera.status === 'live' 
+                      background: camera.status === 'has_clip' 
                         ? 'linear-gradient(135deg, #1a2a3a, #2a3a4a)' 
                         : 'rgba(40, 40, 40, 0.8)',
-                      border: `2px solid ${camera.status === 'live' ? '#76b900' : '#666'}`,
+                      border: `2px solid ${camera.status === 'has_clip' ? '#76b900' : '#666'}`,
                       display: 'flex',
                       flexDirection: 'column',
                       justifyContent: 'center',
@@ -912,13 +1078,13 @@ function FigmaStyleDashboard({ systemHealth }) {
                       handleCameraLiveView(camera, box.name);
                     }}
                     onMouseEnter={(e) => {
-                      if (camera.status === 'live') {
+                      if (camera.status === 'has_clip') {
                         e.target.style.borderColor = '#8fbc8f';
                         e.target.style.transform = 'scale(1.02)';
                       }
                     }}
                     onMouseLeave={(e) => {
-                      if (camera.status === 'live') {
+                      if (camera.status === 'has_clip') {
                         e.target.style.borderColor = '#76b900';
                         e.target.style.transform = 'scale(1)';
                       }
@@ -941,45 +1107,48 @@ function FigmaStyleDashboard({ systemHealth }) {
                       {camera.lastSeen || 'OFFLINE'}
                     </div>
                     
-                    {/* Camera Feed */}
-                    <img 
-                      src={`${camera.thumbnailUrl ? `http://10.0.0.82:8000${camera.thumbnailUrl}` : `http://10.0.0.82:8000/api/stream/${getCameraStreamName(camera.id, camera.name)}/thumbnail`}?t=${Date.now()}`}
-                      alt={`${camera.name} ${camera.status === 'live' ? 'live feed' : 'last captured'}`}
-                      style={{
-                        width: '100%',
-                        height: '100%',
-                        objectFit: 'cover',
-                        borderRadius: '6px'
-                      }}
-                      onError={(e) => {
-                        // Show fallback if image fails to load
-                        e.target.style.display = 'none';
-                        e.target.nextSibling.style.display = 'flex';
-                      }}
-                    />
+                    {/* Camera Feed - Show clip thumbnail, NOT live stream */}
+                    {camera.status === 'has_clip' ? (
+                      <img 
+                        src={`http://10.0.0.82:8000/api/clip/thumbnail?path=${encodeURIComponent(camera.clipPath)}&t=${Date.now()}`}
+                        alt={`${camera.name} latest sighting`}
+                        style={{
+                          width: '100%',
+                          height: '100%',
+                          objectFit: 'cover',
+                          borderRadius: '6px'
+                        }}
+                        onError={(e) => {
+                          // Show fallback if thumbnail generation fails
+                          console.log(`[${camera.name}] Clip thumbnail failed: ${e.target.src}`);
+                          e.target.style.display = 'none';
+                          e.target.nextSibling.style.display = 'flex';
+                        }}
+                      />
+                    ) : null}
                     
-                    {/* Fallback display */}
+                    {/* Fallback display for cameras without clips */}
                     <div style={{
                       width: '100%',
                       height: '100%',
-                      display: 'none',
+                      display: camera.status === 'has_clip' ? 'none' : 'flex',
                       flexDirection: 'column',
                       justifyContent: 'center',
                       alignItems: 'center',
-                      background: camera.status === 'live' ? 'linear-gradient(135deg, #76b900, #8fbc8f)' : 'linear-gradient(135deg, #6c757d, #adb5bd)',
+                      background: camera.status === 'no_clips' ? 'linear-gradient(135deg, #6c757d, #adb5bd)' : 'linear-gradient(135deg, #dc3545, #fd7e14)',
                       borderRadius: '6px'
                     }}>
                       <div style={{
                         fontSize: '2.5rem',
-                        color: camera.status === 'live' ? '#8fbc8f' : '#666',
+                        color: '#666',
                         opacity: 0.7,
                         marginBottom: '0.25rem'
                       }}>
-                        📹
+                        {camera.status === 'no_clips' ? '📹' : '⚠️'}
                       </div>
                       <div style={{
                         fontSize: '0.8rem',
-                        color: camera.status === 'live' ? '#e0e0e0' : '#888',
+                        color: '#888',
                         textAlign: 'center',
                         fontWeight: 600
                       }}>
@@ -990,7 +1159,7 @@ function FigmaStyleDashboard({ systemHealth }) {
                         color: '#888',
                         textAlign: 'center'
                       }}>
-                        {camera.location}
+                        {camera.status === 'no_clips' ? 'No clips yet' : camera.error || 'Error'}
                       </div>
                     </div>
                   </div>
@@ -1014,7 +1183,7 @@ function FigmaStyleDashboard({ systemHealth }) {
               }}>
                 {box.recentSightings.slice(0, 4).map((sighting, sightingIndex) => (
                   <div
-                    key={sighting.id}
+                    key={`${box.id}-sighting-${sightingIndex}`}
                     style={{
                       display: 'flex',
                       justifyContent: 'space-between',
@@ -1025,7 +1194,7 @@ function FigmaStyleDashboard({ systemHealth }) {
                     }}
                     onClick={() => {
                       setModalType('sighting');
-                      setModalData(sighting);
+                      setModalData({...sighting, id: `${box.id}-${sightingIndex}`, time: sighting.timestamp});
                       setModalOpen(true);
                     }}
                   >
@@ -1036,16 +1205,20 @@ function FigmaStyleDashboard({ systemHealth }) {
                       overflow: 'hidden',
                       minWidth: 0
                     }}>
-                      {/* Thumbnail image or fallback emoji */}
-                      {sighting.thumbnail_url ? (
-                        <div style={{
-                          width: '32px',
-                          height: '24px',
-                          borderRadius: '4px',
-                          overflow: 'hidden',
-                          border: '1px solid rgba(76, 175, 80, 0.3)',
-                          flexShrink: 0
-                        }}>
+                      {/* Larger thumbnail - no emoji fallback */}
+                      <div style={{
+                        width: '48px',
+                        height: '36px',
+                        borderRadius: '6px',
+                        overflow: 'hidden',
+                        border: '1px solid rgba(76, 175, 80, 0.3)',
+                        flexShrink: 0,
+                        background: 'rgba(40, 40, 40, 0.8)',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center'
+                      }}>
+                        {sighting.thumbnail_url ? (
                           <img 
                             src={sighting.thumbnail_url}
                             alt={`${sighting.species} sighting`}
@@ -1055,19 +1228,22 @@ function FigmaStyleDashboard({ systemHealth }) {
                               objectFit: 'cover'
                             }}
                             onError={(e) => {
-                              // Fallback to emoji if image fails to load
+                              // Show a generic camera icon if thumbnail fails to load
                               e.target.style.display = 'none';
-                              e.target.nextSibling.style.display = 'inline';
+                              e.target.nextSibling.style.display = 'flex';
                             }}
                           />
-                          <span style={{ 
-                            fontSize: '0.8rem', 
-                            display: 'none'
-                          }}>{sighting.image}</span>
-                        </div>
-                      ) : (
-                        <span style={{ fontSize: '0.8rem' }}>{sighting.image}</span>
-                      )}
+                        ) : null}
+                        <div style={{ 
+                          fontSize: '1.2rem', 
+                          color: '#666',
+                          display: sighting.thumbnail_url ? 'none' : 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          width: '100%',
+                          height: '100%'
+                        }}>📷</div>
+                      </div>
                       <div style={{ display: 'flex', flexDirection: 'column', overflow: 'hidden', minWidth: 0, gap: '0.2rem' }}>
                         <span style={{
                           fontSize: '0.75rem',

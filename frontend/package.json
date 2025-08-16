@@ -21,7 +21,7 @@
     "postcss": "^8.4.31"
   },
   "scripts": {
-    "start": "BROWSER=none WDS_SOCKET_PORT=0 vite --port 3001 --host 0.0.0.0",
+    "start": "BROWSER=none WDS_SOCKET_PORT=0 vite --host 0.0.0.0",
     "build": "vite build",
     "preview": "vite preview",
     "test": "vitest"

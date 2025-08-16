@@ -33,7 +33,7 @@ nutflix-platform/
 - **Flask + Flask-CORS**: Web framework and API
 - **React**: Frontend dashboard with routing
 - **picamera2**: Pi camera interface
-- **OpenCV**: Computer vision and motion detection
+- **Image Processing**: OpenCV for thumbnail generation only
 - **TensorFlow Lite**: Lightweight AI inference on Pi
 - **BME280**: Environmental sensor (temperature, humidity)
 - **sounddevice**: Audio recording
@@ -61,7 +61,7 @@ nutflix-platform/
 
 ## Pi-Specific Considerations:
 - Uses tflite-runtime instead of full TensorFlow (10x faster)
-- picamera2 for camera access (not opencv camera)
+- picamera2 for camera access (OpenCV only for thumbnails)
 - I2C enabled for BME280 sensor
 - Hardware-accelerated video encoding
 - Systemd service for auto-start

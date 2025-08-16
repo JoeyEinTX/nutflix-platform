@@ -1,0 +1,8 @@
+{
+  "name": "nutflix-root",
+  "private": true,
+  "scripts": {
+    "start": "cd frontend && npm start",
+    "install-all": "cd frontend && npm install"
+  }
+}

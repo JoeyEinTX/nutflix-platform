@@ -12,10 +12,10 @@ timestamp = datetime.now().isoformat()
 cur.execute('''
     INSERT INTO motion_events (timestamp, camera, motion_type, confidence, duration)
     VALUES (?, ?, ?, ?, ?)
-''', (timestamp, 'NestCam', 'gpio', 0.9, 2.0))
+''', (timestamp, 'CritterCam', 'gpio', 0.95, 2.3))
 
 conn.commit()
-print(f"✅ Added test motion event: {timestamp} - NestCam - gpio")
+print(f"✅ Added test motion event: {timestamp} - CritterCam - gpio")
 
 # Show recent events
 print("\n=== Recent Motion Events ===")

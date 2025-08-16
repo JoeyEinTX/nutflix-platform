@@ -33,7 +33,7 @@ def main():
             # Create motion data compatible with sighting service
             motion_data = {
                 'camera': camera_name,
-                'motion_type': 'gpio',  # PIR sensor type
+                'type': 'gpio',  # PIR sensor type
                 'confidence': 0.95,     # PIR sensors are very reliable
                 'detection_method': motion_event.get('detection_method', 'hardware_motion_sensor'),
                 'sensor_type': motion_event.get('sensor_type', 'PIR'),
@@ -61,7 +61,7 @@ def main():
         'detection_method': 'hardware_motion_sensor',
         'trigger_type': 'pir_motion',
         'gpio_pin': 18,
-        'motion_type': 'motion_start'
+        'motion_type': 'motion_start'  # PIR motion event type
     }
     
     # Call the callback with test data
